@@ -1,0 +1,8 @@
+{
+  "name": "innweb-opportunity-finder",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {"dev":"next dev","build":"next build","start":"next start","lint":"next lint"},
+  "dependencies": {"cheerio":"^1.1.2","next":"16.4.0","react":"latest","react-dom":"latest","zod":"^4.1.11"},
+  "devDependencies": {"@types/node":"latest","@types/react":"latest","@types/react-dom":"latest","typescript":"latest"}
+}
