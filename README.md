@@ -5,12 +5,13 @@ A bilingual, non-invasive website audit MVP for agencies. It evaluates public pa
 ## Run locally
 
 ```bash
-cp .env.example .env.local
 npm install
 npm run dev
 ```
 
 Open `http://localhost:3000`.
+
+The home page audits one public URL at a time. Automatic prospect discovery is not connected; sample buttons run real audits against the listed sample websites. The dashboard currently contains demonstration metrics.
 
 ## API
 
@@ -25,19 +26,22 @@ Change `language` to `es` for Spanish recommendations.
 ## Security and responsible use
 
 - Scans only a single public page and public DNS records.
-- Blocks localhost, link-local, and private network targets to reduce SSRF risk.
-- Uses timeouts and a 3 MB HTML analysis cap.
+- Resolves and pins public IP addresses, revalidates every redirect, and blocks private, reserved, and non-standard-port targets.
+- Uses a request timeout, a 3 MB HTML analysis cap, and a best-effort in-memory limit of 20 requests per minute per IP and server instance.
 - Does not bypass authentication, crawl private paths, exploit vulnerabilities, or infer whether backups/monitoring exist.
 - Treat scores as directional indicators, not verified facts or revenue guarantees.
 - Obtain appropriate permission before using results for intrusive testing or automated outreach.
 
 ## Production next steps
 
-1. Add authentication, agency tenancy, rate limits, queues, and Postgres persistence.
-2. Run audits in isolated workers with egress policy and DNS rebinding protection.
-3. Integrate approved performance and accessibility providers.
-4. Add consent-aware prospect workflows and audit retention controls.
-5. Add tests, observability, signed reports, and a versioned scoring model.
+1. Replace the in-memory request limit with durable rate limiting and add authentication and agency tenancy.
+2. Run audits in isolated workers with an explicit egress policy.
+3. Integrate an approved site-discovery source and performance/accessibility providers.
+4. Add consent-aware prospect workflows, audit retention controls, observability, and a versioned scoring model.
+
+## Public deployment
+
+Import this repository into Vercel and deploy it as a Next.js project. To use `os.innweb.co`, add that hostname to the Vercel project and create the exact DNS record Vercel provides at the domain's DNS provider. Keep the existing `innweb.co` apex records unchanged. Set `NEXT_PUBLIC_SITE_URL=https://os.innweb.co` in the Vercel project for canonical metadata.
 
 
 ## Publicar en GitHub

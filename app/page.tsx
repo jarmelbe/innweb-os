@@ -1,33 +1,275 @@
 "use client";
-import {useState} from "react";
+
 import Link from "next/link";
-type Lang="en"|"es";
-type Result={
-  url:string;
-  scannedAt:string;
-  summary:string;
-  quickWins:{title:string;impact:string;category:string;recommendation:string}[];
-  focusAreas:{category:string;score:number;issues:number}[];
-  scores:Record<string,number>;
-  opportunityScore:number;
-  classification:string;
-  findings:{severity:string;category:string;title:string;recommendation:string}[];
+import { useState, type KeyboardEvent } from "react";
+
+type Language = "en" | "es";
+type AuditResult = {
+  url: string;
+  scannedAt: string;
+  summary: string;
+  quickWins: { title: string; impact: string; category: string; recommendation: string }[];
+  focusAreas: { category: string; score: number; issues: number }[];
+  scores: Record<string, number>;
+  opportunityScore: number;
+  classification: string;
+  signals: {
+    httpStatus: number;
+    responseTimeMs: number;
+    htmlBytes: number;
+    images: number;
+    missingAlt: number;
+    hasSpf: boolean;
+    hasDmarc: boolean;
+    hasMail: boolean;
+  };
+  findings: { severity: string; category: string; title: string; recommendation: string }[];
 };
-const sampleSites=[
-  {label:"Example", url:"https://example.com"},
-  {label:"GitHub", url:"https://github.com"},
-  {label:"Vercel", url:"https://vercel.com"},
-  {label:"Wikipedia", url:"https://www.wikipedia.org"},
-  {label:"Apple", url:"https://www.apple.com"},
-  {label:"NASA", url:"https://www.nasa.gov"},
+
+const sampleSites = [
+  { label: "Example", url: "https://example.com" },
+  { label: "GitHub", url: "https://github.com" },
+  { label: "Vercel", url: "https://vercel.com" },
+  { label: "Wikipedia", url: "https://www.wikipedia.org" },
+  { label: "Apple", url: "https://www.apple.com" },
+  { label: "NASA", url: "https://www.nasa.gov" },
 ];
-const leadPool=[
-  {name:"Monterrey Dental", url:"https://www.monterreydental.mx", quality:"poor", value:5400, reason:"Weak CTA, no clear trust signals, weak metadata"},
-  {name:"Soluciones Plus", url:"https://www.solucionesplus.com", quality:"medium", value:7100, reason:"Good structure, but missing mobile and security polish"},
-  {name:"Northshore Realty", url:"https://www.northshorerealty.com", quality:"good", value:9400, reason:"Solid foundation with a few conversion improvements"},
-  {name:"Aster Studio", url:"https://www.asterstudio.co", quality:"poor", value:4800, reason:"No clear headline hierarchy and low conversion intent"},
-  {name:"Costa Verde Legal", url:"https://www.costaverdelegal.com", quality:"medium", value:6800, reason:"Strong authority signals, but outdated technical hygiene"},
-  {name:"Nexo Commerce", url:"https://www.nexocommerce.io", quality:"good", value:9800, reason:"Healthy technical profile with room to improve trust-focused pages"},
-];
-const copy={en:{eyebrow:"INNweb OS",title:"Opportunity Finder",subtitle:"Find the technical gaps. Turn them into responsible, evidence-based opportunities.",placeholder:"https://example.com",scan:"Run professional audit",scanning:"Auditing…",overall:"Overall quality",opportunity:"Opportunity",findings:"Priority recommendations",empty:"Enter a public website to analyze its visible quality and infrastructure signals.",note:"Only public, non-invasive checks are performed. Scores are indicators, not guarantees.",summary:"Site summary",quickWins:"Fast wins",areas:"Focus areas",sample:"Try a sample site",search:"Search for improvement opportunities",leadTitle:"Curated lead board",leadSubtitle:"Sites worth improving first based on technical gaps and conversion potential.",qualityPoor:"Poor fit",qualityMedium:"Needs polish",qualityGood:"Healthy base",value:"Potential value",open:"Open site"},es:{eyebrow:"INNweb OS",title:"Buscador de Oportunidades",subtitle:"Encuentra brechas técnicas y conviértelas en oportunidades responsables basadas en evidencia.",placeholder:"https://ejemplo.com",scan:"Ejecutar auditoría profesional",scanning:"Auditando…",overall:"Calidad general",opportunity:"Oportunidad",findings:"Recomendaciones prioritarias",empty:"Ingresa un sitio web público para analizar señales visibles de calidad e infraestructura.",note:"Solo se realizan verificaciones públicas y no invasivas. Los puntajes son indicadores, no garantías.",summary:"Resumen del sitio",quickWins:"Ganancias rápidas",areas:"Áreas a enfocarse",sample:"Prueba un sitio ejemplo",search:"Busca oportunidades de mejora",leadTitle:"Listado curado de leads",leadSubtitle:"Sitios que conviene mejorar primero por huecos técnicos y potencial de conversión.",qualityPoor:"Bajo fit",qualityMedium:"Necesita pulido",qualityGood:"Base saludable",value:"Valor potencial",open:"Abrir sitio"}};
-export default function Home(){const [lang,setLang]=useState<Lang>("en");const [url,setUrl]=useState("");const [loading,setLoading]=useState(false);const [error,setError]=useState("");const [result,setResult]=useState<Result|null>(null);const t=copy[lang];async function run(targetUrl=(url||"")){setLoading(true);setError("");setResult(null);try{const value=targetUrl.trim();if(!value){throw new Error("Please enter a public website URL");}const r=await fetch("/api/v1/opportunity-finder/audit",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({url:value,language:lang})});const j=await r.json();if(!r.ok)throw new Error(j.error||"Audit failed");setResult(j);setUrl(value);}catch(e){setError(e instanceof Error?e.message:"Audit failed")}finally{setLoading(false)}}const handleKeyDown=(event: React.KeyboardEvent<HTMLInputElement>)=>{if(event.key==="Enter"){run();}};return <main className="finder-shell"><div className="orb one"/><div className="orb two"/><header className="topbar"><div className="brand"><span className="mark">in</span><span>{t.eyebrow}</span><Link href="/dashboard" className="command-link">Command Center →</Link></div><div className="seg"><button className={lang==="en"?"active":""} onClick={()=>setLang("en")}>EN</button><button className={lang==="es"?"active":""} onClick={()=>setLang("es")}>ES</button></div></header><section className="hero"><div className="hero-copy"><p className="kicker">AUDIT INTELLIGENCE</p><h1>{t.title}</h1><p>{t.subtitle}</p></div><div className="hero-stats"><div><strong>48</strong><span>signals</span></div><div><strong>7</strong><span>categories</span></div><div><strong>24h</strong><span>decision window</span></div></div></section><section className="search-panel"><div className="search"><input aria-label="Website URL" value={url} onChange={e=>setUrl(e.target.value)} onKeyDown={handleKeyDown} placeholder={t.placeholder}/><button onClick={()=>run()} disabled={loading||!url}>{loading?t.scanning:t.scan}</button></div><div className="sample-row"><span>{t.sample}</span>{sampleSites.map(site=><button key={site.url} className="sample-pill" onClick={()=>{setUrl(site.url);run(site.url);}}>{site.label}</button>)}</div><div className="lead-board"><div className="lead-header"><div><span>{t.leadTitle}</span><h3>{t.leadSubtitle}</h3></div></div><div className="lead-grid">{leadPool.map((lead)=><article key={lead.url} className={`lead-card ${lead.quality}`}><div className="lead-top"><span className={`lead-badge ${lead.quality}`}>{lead.quality==="poor"?t.qualityPoor:lead.quality==="medium"?t.qualityMedium:t.qualityGood}</span><strong>${lead.value.toLocaleString()}</strong></div><h4>{lead.name}</h4><p>{lead.reason}</p><div className="lead-meta"><small>{lead.url.replace(/^https?:\/\//i, "")}</small><button onClick={()=>{setUrl(lead.url);run(lead.url);}}>{t.open}</button></div></article>)}</div></div>{error&&<p className="error">{error}</p>}<small>{t.note}</small></section>{result?<section className="results"><div className="scoreCard"><div className="label-row"><span>{t.overall}</span><em>{result.scores.overall}/100</em></div><strong>{result.scores.overall}</strong><div className="bar"><i style={{width:`${result.scores.overall}%`}}/></div></div><div className="scoreCard opportunity"><div className="label-row"><span>{t.opportunity}</span><em>{result.classification}</em></div><strong>{result.opportunityScore}</strong><b>{result.classification}</b></div><div className="summary-card"><h3>{t.summary}</h3><p>{result.summary}</p></div><div className="focus-card"><h3>{t.areas}</h3><div className="focus-list">{result.focusAreas.map((area)=><div key={area.category} className="focus-item"><div className="focus-header"><span>{area.category}</span><strong>{area.score}</strong></div><div className="mini-bar"><i style={{width:`${area.score}%`}}/></div><small>{area.issues} issue{area.issues!==1?"s":""}</small></div>)}</div></div><div className="grid">{Object.entries(result.scores).filter(([k])=>k!=="overall").map(([k,v])=><article key={k}><span>{k}</span><strong>{v}</strong></article>)}</div><div className="quickWins"><h3>{t.quickWins}</h3>{result.quickWins.map((item,i)=><article key={i}><div><em>{item.impact}</em><span>{item.category}</span></div><h4>{item.title}</h4><p>{item.recommendation}</p></article>)}</div><div className="findings"><h2>{t.findings}</h2>{result.findings.map((f,i)=><article key={i}><div><em>{f.severity}</em><span>{f.category}</span></div><h3>{f.title}</h3><p>{f.recommendation}</p></article>)}</div></section>:<section className="empty"><div className="empty-card"><h2>{t.empty}</h2><p>{t.search}</p></div></section>}</main>}
+
+const copy = {
+  en: {
+    eyebrow: "INNweb OS",
+    title: "Opportunity Finder",
+    subtitle: "Find visible website gaps. Turn them into responsible, evidence-based opportunities.",
+    placeholder: "https://example.com",
+    scan: "Run website audit",
+    scanning: "Auditing…",
+    overall: "Overall quality",
+    opportunity: "Opportunity score",
+    findings: "All findings",
+    empty: "Enter a public website to analyze its visible quality and infrastructure signals.",
+    note: "One public page per audit. No crawling, authentication bypass, or exploit testing.",
+    summary: "Site summary",
+    quickWins: "Priority quick wins",
+    areas: "Focus areas",
+    sample: "Try a sample site",
+    search: "Lead discovery is not connected yet. Enter a domain or use a sample to run a real audit.",
+    categories: "score categories",
+    page: "page per audit",
+    limit: "HTML analysis cap",
+    status: "HTTP status",
+    responseTime: "Response time",
+    pageSize: "HTML analyzed",
+    missingAlt: "Images missing alt",
+    observedSignals: "Observed signals",
+    issue: "issue",
+    issues: "issues",
+    emailProtection: "Email protection",
+    yes: "Detected",
+    no: "Not detected",
+  },
+  es: {
+    eyebrow: "INNweb OS",
+    title: "Buscador de Oportunidades",
+    subtitle: "Detecta brechas visibles y conviértelas en oportunidades responsables basadas en evidencia.",
+    placeholder: "https://ejemplo.com",
+    scan: "Auditar sitio web",
+    scanning: "Auditando…",
+    overall: "Calidad general",
+    opportunity: "Puntaje de oportunidad",
+    findings: "Todos los hallazgos",
+    empty: "Ingresa un sitio público para analizar señales visibles de calidad e infraestructura.",
+    note: "Una página pública por auditoría. Sin rastreo, acceso autenticado ni pruebas de explotación.",
+    summary: "Resumen del sitio",
+    quickWins: "Mejoras prioritarias",
+    areas: "Áreas de enfoque",
+    sample: "Prueba un sitio ejemplo",
+    search: "La búsqueda automática de prospectos aún no está conectada. Ingresa un dominio o prueba un ejemplo.",
+    categories: "categorías de puntaje",
+    page: "página por auditoría",
+    limit: "límite de análisis HTML",
+    status: "Estado HTTP",
+    responseTime: "Tiempo de respuesta",
+    pageSize: "HTML analizado",
+    missingAlt: "Imágenes sin alt",
+    observedSignals: "Señales observadas",
+    issue: "hallazgo",
+    issues: "hallazgos",
+    emailProtection: "Protección de correo",
+    yes: "Detectado",
+    no: "No detectado",
+  },
+} as const;
+
+export default function Home() {
+  const [language, setLanguage] = useState<Language>("es");
+  const [url, setUrl] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  const [result, setResult] = useState<AuditResult | null>(null);
+  const t = copy[language];
+
+  async function runAudit(targetUrl = url) {
+    const value = targetUrl.trim();
+    if (!value) return;
+
+    setLoading(true);
+    setError("");
+    setResult(null);
+    try {
+      const response = await fetch("/api/v1/opportunity-finder/audit", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ url: value, language }),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Audit failed");
+      setResult(data as AuditResult);
+      setUrl(value);
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Audit failed");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  function handleKeyDown(event: KeyboardEvent<HTMLInputElement>) {
+    if (event.key === "Enter") void runAudit();
+  }
+
+  return (
+    <main className="finder-shell">
+      <div className="orb one" />
+      <div className="orb two" />
+      <header className="topbar">
+        <div className="brand">
+          <span className="mark">in</span>
+          <span>{t.eyebrow}</span>
+          <Link href="/dashboard" className="command-link">Command Center →</Link>
+        </div>
+        <div className="seg" aria-label="Language">
+          <button className={language === "en" ? "active" : ""} onClick={() => setLanguage("en")}>EN</button>
+          <button className={language === "es" ? "active" : ""} onClick={() => setLanguage("es")}>ES</button>
+        </div>
+      </header>
+
+      <section className="hero">
+        <div className="hero-copy">
+          <p className="kicker">AUDIT INTELLIGENCE</p>
+          <h1>{t.title}</h1>
+          <p>{t.subtitle}</p>
+        </div>
+        <div className="hero-stats">
+          <div><strong>6</strong><span>{t.categories}</span></div>
+          <div><strong>1</strong><span>{t.page}</span></div>
+          <div><strong>3 MB</strong><span>{t.limit}</span></div>
+        </div>
+      </section>
+
+      <section className="search-panel">
+        <div className="search">
+          <input
+            aria-label="Website URL"
+            value={url}
+            onChange={(event) => setUrl(event.target.value)}
+            onKeyDown={handleKeyDown}
+            placeholder={t.placeholder}
+          />
+          <button onClick={() => void runAudit()} disabled={loading || !url.trim()}>
+            {loading ? t.scanning : t.scan}
+          </button>
+        </div>
+        <div className="sample-row">
+          <span>{t.sample}</span>
+          {sampleSites.map((site) => (
+            <button
+              key={site.url}
+              className="sample-pill"
+              disabled={loading}
+              onClick={() => {
+                setUrl(site.url);
+                void runAudit(site.url);
+              }}
+            >
+              {site.label}
+            </button>
+          ))}
+        </div>
+        <p className="discovery-note">{t.search}</p>
+        {error && <p className="error" role="alert">{error}</p>}
+        <small>{t.note}</small>
+      </section>
+
+      {result ? (
+        <section className="results" aria-live="polite">
+          <div className="scoreCard">
+            <div className="label-row"><span>{t.overall}</span><em>{result.scores.overall}/100</em></div>
+            <strong>{result.scores.overall}</strong>
+            <div className="bar"><i style={{ width: `${result.scores.overall}%` }} /></div>
+          </div>
+          <div className="scoreCard opportunity">
+            <div className="label-row"><span>{t.opportunity}</span><em>{result.classification}</em></div>
+            <strong>{result.opportunityScore}</strong>
+            <b>{result.classification}</b>
+          </div>
+          <div className="summary-card">
+            <div className="result-url">{result.url}</div>
+            <h3>{t.summary}</h3>
+            <p>{result.summary}</p>
+          </div>
+          <div className="focus-card">
+            <h3>{t.areas}</h3>
+            <div className="focus-list">
+              {result.focusAreas.map((area) => (
+                <div key={area.category} className="focus-item">
+                  <div className="focus-header"><span>{area.category}</span><strong>{area.score}</strong></div>
+                  <div className="mini-bar"><i style={{ width: `${area.score}%` }} /></div>
+                  <small>{area.issues} {area.issues === 1 ? t.issue : t.issues}</small>
+                </div>
+              ))}
+            </div>
+          </div>
+          <div className="grid">
+            {Object.entries(result.scores).filter(([key]) => key !== "overall").map(([key, score]) => (
+              <article key={key}><span>{key}</span><strong>{score}</strong></article>
+            ))}
+          </div>
+          <div className="signals-card">
+            <h3>{t.observedSignals}</h3>
+            <div className="signals-grid">
+              <div><span>{t.status}</span><strong>{result.signals.httpStatus}</strong></div>
+              <div><span>{t.responseTime}</span><strong>{result.signals.responseTimeMs} ms</strong></div>
+              <div><span>{t.pageSize}</span><strong>{(result.signals.htmlBytes / 1024).toFixed(1)} KB</strong></div>
+              <div><span>{t.missingAlt}</span><strong>{result.signals.missingAlt}/{result.signals.images}</strong></div>
+              <div><span>SPF</span><strong>{result.signals.hasSpf ? t.yes : t.no}</strong></div>
+              <div><span>DMARC</span><strong>{result.signals.hasDmarc ? t.yes : t.no}</strong></div>
+            </div>
+          </div>
+          <div className="quickWins">
+            <h3>{t.quickWins}</h3>
+            {result.quickWins.length ? result.quickWins.map((item, index) => (
+              <article key={`${item.category}-${index}`}>
+                <div><em>{item.impact}</em><span>{item.category}</span></div>
+                <h4>{item.title}</h4>
+                <p>{item.recommendation}</p>
+              </article>
+            )) : <p>No priority findings from this page.</p>}
+          </div>
+          <div className="findings">
+            <h2>{t.findings}</h2>
+            {result.findings.length ? result.findings.map((finding, index) => (
+              <article key={`${finding.category}-${index}`}>
+                <div><em>{finding.severity}</em><span>{finding.category}</span></div>
+                <h3>{finding.title}</h3>
+                <p>{finding.recommendation}</p>
+              </article>
+            )) : <p>No findings detected in the checks performed.</p>}
+          </div>
+        </section>
+      ) : (
+        <section className="empty">
+          <div className="empty-card"><h2>{t.empty}</h2></div>
+        </section>
+      )}
+    </main>
+  );
+}
