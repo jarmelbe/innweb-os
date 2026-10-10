@@ -4,5 +4,6 @@ out/
 build/
 .vercel/
 .env*
+!.env.example
 *.tsbuildinfo
 AGENTS.md

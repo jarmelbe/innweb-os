@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useState, type KeyboardEvent } from "react";
+import { useEffect, useState, type FormEvent, type KeyboardEvent } from "react";
 
 type Language = "en" | "es";
 type AuditResult = {
@@ -106,7 +106,29 @@ export default function Home() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [result, setResult] = useState<AuditResult | null>(null);
+  const [authenticated, setAuthenticated] = useState(false);
+  const [companyName, setCompanyName] = useState("");
+  const [contactName, setContactName] = useState("");
+  const [contactEmail, setContactEmail] = useState("");
+  const [contactPhone, setContactPhone] = useState("");
+  const [nextFollowUpAt, setNextFollowUpAt] = useState("");
+  const [captureMessage, setCaptureMessage] = useState("");
+  const [captureBusy, setCaptureBusy] = useState(false);
   const t = copy[language];
+
+  async function checkSession() {
+    try {
+      const response = await fetch("/api/auth/session");
+      const session = await response.json();
+      setAuthenticated(response.ok && session.authenticated === true);
+    } catch {
+      setAuthenticated(false);
+    }
+  }
+
+  useEffect(() => {
+    void checkSession();
+  }, []);
 
   async function runAudit(targetUrl = url) {
     const value = targetUrl.trim();
@@ -125,6 +147,9 @@ export default function Home() {
       if (!response.ok) throw new Error(data.error || "Audit failed");
       setResult(data as AuditResult);
       setUrl(value);
+      setCompanyName((current) => current || new URL(data.url).hostname.replace(/^www\./, ""));
+      setCaptureMessage("");
+      void checkSession();
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Audit failed");
     } finally {
@@ -134,6 +159,37 @@ export default function Home() {
 
   function handleKeyDown(event: KeyboardEvent<HTMLInputElement>) {
     if (event.key === "Enter") void runAudit();
+  }
+
+  async function captureOpportunity(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!result) return;
+
+    setCaptureBusy(true);
+    setCaptureMessage("");
+    try {
+      const response = await fetch("/api/crm/audits/capture", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          companyName,
+          contactName,
+          email: contactEmail,
+          phone: contactPhone,
+          nextFollowUpAt: nextFollowUpAt ? new Date(`${nextFollowUpAt}T12:00:00.000Z`).toISOString() : undefined,
+          audit: result,
+        }),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "No se pudo guardar la oportunidad.");
+      setCaptureMessage(language === "es"
+        ? `Listo. Se guardaron el prospecto, la oportunidad y la evidencia del diagnóstico (${data.ids.account.slice(0, 8)}).`
+        : `Saved lead, opportunity, and audit evidence (${data.ids.account.slice(0, 8)}).`);
+    } catch (caught) {
+      setCaptureMessage(caught instanceof Error ? caught.message : "No se pudo guardar la oportunidad.");
+    } finally {
+      setCaptureBusy(false);
+    }
   }
 
   return (
@@ -264,12 +320,36 @@ export default function Home() {
               </article>
             )) : <p>No findings detected in the checks performed.</p>}
           </div>
+          <div className="summary-card">
+            <h3>{language === "es" ? "Convertir diagnóstico en oportunidad" : "Turn audit into an opportunity"}</h3>
+            {!authenticated ? (
+              <p>{language === "es" ? "Inicia sesión para guardar esta evidencia en el CRM." : "Sign in to save this evidence to the CRM."} <Link href="/login">{language === "es" ? "Iniciar sesión" : "Sign in"} →</Link></p>
+            ) : (
+              <form className="capture-form" onSubmit={captureOpportunity}>
+                <label>{language === "es" ? "Empresa" : "Company"}<input required minLength={2} maxLength={200} value={companyName} onChange={(event) => setCompanyName(event.target.value)} /></label>
+                <label>{language === "es" ? "Contacto (opcional)" : "Contact (optional)"}<input maxLength={200} value={contactName} onChange={(event) => setContactName(event.target.value)} /></label>
+                <label>Email<input type="email" maxLength={254} value={contactEmail} onChange={(event) => setContactEmail(event.target.value)} /></label>
+                <label>{language === "es" ? "Teléfono" : "Phone"}<input maxLength={40} value={contactPhone} onChange={(event) => setContactPhone(event.target.value)} /></label>
+                <label>{language === "es" ? "Próximo seguimiento" : "Next follow-up"}<input type="date" value={nextFollowUpAt} onChange={(event) => setNextFollowUpAt(event.target.value)} /></label>
+                <button disabled={captureBusy}>{captureBusy ? (language === "es" ? "Guardando…" : "Saving…") : (language === "es" ? "Guardar en CRM" : "Save to CRM")}</button>
+              </form>
+            )}
+            {captureMessage && <p role="status">{captureMessage}</p>}
+          </div>
         </section>
       ) : (
         <section className="empty">
           <div className="empty-card"><h2>{t.empty}</h2></div>
         </section>
       )}
+      <style jsx>{`
+        .capture-form{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+        .capture-form label{display:grid;gap:7px;color:#aaaab2;font-size:12px}
+        .capture-form input{min-width:0;border:1px solid #ffffff1a;border-radius:9px;background:#08080b;padding:10px;color:#f5f5f7}
+        .capture-form button{align-self:end;border:0;border-radius:9px;padding:11px 14px;background:#f5f5f7;color:#08080b;font-weight:750}
+        .capture-form button:disabled{opacity:.6}
+        @media(max-width:640px){.capture-form{grid-template-columns:1fr}}
+      `}</style>
     </main>
   );
 }
