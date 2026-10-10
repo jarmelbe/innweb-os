@@ -195,7 +195,7 @@ async function fetchPublicPage(
       url,
       {
         headers: {
-          "user-agent": process.env.AUDIT_USER_AGENT || "INNweb Opportunity Finder/0.1",
+          "user-agent": process.env.AUDIT_USER_AGENT || "InnWeb Diagnostics Intelligence Rank Pulse/0.1",
           accept: "text/html,application/xhtml+xml",
         },
         lookup: pinnedLookup,

@@ -9,6 +9,20 @@ type Overview = {
   counts: { accounts: number; openOpportunities: number; customers: number; projects: number; overdueActivities: number };
   pipelineValueCop: string | null;
   stages: { stage: string; count: number }[];
+  intelligence: {
+    auditCount: number;
+    averageOverallScore: number | null;
+    averageOpportunityScore: number | null;
+    latestAudit: {
+      requestedUrl: string;
+      overallScore: number | null;
+      opportunityScore: number | null;
+      classification: string | null;
+      auditedAt: string;
+    } | null;
+  };
+  proposalConversion: { total: number; accepted: number };
+  historicalCloseRate: { closed: number; won: number };
 };
 type CrmAccount = {
   id: string;
@@ -63,13 +77,38 @@ const copy = {
     product: "Centro de Comando",
     greeting: "CRM profesional",
     intro: "Una sola base para el ciclo comercial y operativo de InnWeb.",
-    nav: ["Estado", "Ventas", "Clientes", "Propuestas", "Proyectos", "Finanzas"],
+    nav: ["Estado", "Intelligence", "Ventas", "Clientes", "Propuestas", "Proyectos", "Finanzas"],
     scan: "Analizar un sitio",
-    status: "PostgreSQL pendiente de conexión",
-    statusDetail: "El esquema CRM está listo; no hay una base conectada ni registros cargados.",
-    setupTitle: "Siguiente paso: conectar una instancia PostgreSQL existente",
-    setupDescription: "Configura DATABASE_URL de forma privada, aplica la migración y después habilita autenticación y permisos antes de guardar datos de clientes.",
+    status: "Resumen del CRM",
     dataPolicy: "No se muestran empresas, ingresos, clientes ni métricas ficticias.",
+    observatory: "Intelligence / Rank Pulse",
+    measured: "Datos medidos",
+    diagnosticScore: "Puntaje diagnóstico",
+    opportunityScore: "Puntaje de oportunidad",
+    proposalAcceptance: "Propuestas aceptadas",
+    auditCount: "Auditorías registradas",
+    latestAudit: "Último diagnóstico guardado",
+    noAudits: "Aún no hay diagnósticos guardados en el CRM.",
+    heuristicNote: "Puntajes heurísticos del análisis de una página; no son posiciones reales en Google.",
+    operationalMap: "Ciclo operativo InnWeb",
+    volumeByModule: "Registros actuales por módulo · no representa conversiones entre etapas",
+    audits: "Diagnósticos",
+    opportunities: "Oportunidades abiertas",
+    proposals: "Propuestas",
+    activeProjects: "Proyectos activos",
+    scoreSimulator: "Simulador de mejora Rank Pulse",
+    scoreSimulatorNote: "Escenario teórico: cierra una parte de la brecha del puntaje heurístico actual. No predice rankings ni resultados de buscadores.",
+    findingsResolved: "Brecha del puntaje que se supone corregir",
+    projectedDiagnostic: "Puntaje diagnóstico simulado",
+    noAuditToSimulate: "Guarda primero un diagnóstico para simular un escenario.",
+    commercialSimulator: "Simulador comercial",
+    estimateOnly: "Estimación hipotética · no es ingreso contable ni compromiso comercial",
+    scenarioOpportunities: "Oportunidades nuevas en el escenario",
+    scenarioConversion: "Conversión estimada (%)",
+    scenarioTicket: "Valor promedio supuesto (COP)",
+    scenarioResult: "Valor potencial estimado",
+    useObservedRate: "Usar tasa histórica",
+    noObservedRate: "No hay cierres históricos para calcular una tasa observada.",
     sections: [
       { id: "ventas", title: "CRM comercial", description: "Empresas y contactos, responsables, prioridad, origen, segmentación y conversión de prospecto a cliente." },
       { id: "pipeline", title: "Pipeline y seguimiento", description: "Oportunidades por etapa, probabilidad, monto y cierre previsto; llamadas, reuniones, tareas y próximos contactos." },
@@ -137,13 +176,38 @@ const copy = {
     product: "Command Center",
     greeting: "Professional CRM",
     intro: "One source of truth for InnWeb's commercial and operational cycle.",
-    nav: ["Status", "Sales", "Clients", "Proposals", "Projects", "Finance"],
+    nav: ["Status", "Intelligence", "Sales", "Clients", "Proposals", "Projects", "Finance"],
     scan: "Audit a website",
-    status: "PostgreSQL not connected",
-    statusDetail: "The CRM schema is ready; no database is connected and no records are loaded.",
-    setupTitle: "Next: connect an existing PostgreSQL instance",
-    setupDescription: "Set DATABASE_URL privately, apply the migration, then enable authentication and access controls before storing customer data.",
+    status: "CRM overview",
     dataPolicy: "No fictional companies, revenue, customers, or metrics are shown.",
+    observatory: "Intelligence / Rank Pulse",
+    measured: "Measured data",
+    diagnosticScore: "Diagnostic score",
+    opportunityScore: "Opportunity score",
+    proposalAcceptance: "Accepted proposals",
+    auditCount: "Audits recorded",
+    latestAudit: "Latest saved diagnostic",
+    noAudits: "No diagnostics have been saved to the CRM yet.",
+    heuristicNote: "Heuristic scores from a single-page analysis; these are not actual Google positions.",
+    operationalMap: "InnWeb operating cycle",
+    volumeByModule: "Current records by module · not conversions between stages",
+    audits: "Diagnostics",
+    opportunities: "Open opportunities",
+    proposals: "Proposals",
+    activeProjects: "Active projects",
+    scoreSimulator: "Rank Pulse improvement simulator",
+    scoreSimulatorNote: "Theoretical scenario: close part of the current heuristic-score gap. It does not predict search rankings or results.",
+    findingsResolved: "Score gap assumed to be addressed",
+    projectedDiagnostic: "Simulated diagnostic score",
+    noAuditToSimulate: "Save a diagnostic first to simulate a scenario.",
+    commercialSimulator: "Commercial simulator",
+    estimateOnly: "Hypothetical estimate · not booked revenue or a commercial commitment",
+    scenarioOpportunities: "New opportunities in scenario",
+    scenarioConversion: "Estimated conversion (%)",
+    scenarioTicket: "Assumed average value (COP)",
+    scenarioResult: "Estimated potential value",
+    useObservedRate: "Use historical rate",
+    noObservedRate: "There are no historical closed deals to calculate an observed rate.",
     sections: [
       { id: "ventas", title: "Sales CRM", description: "Company and contact records, ownership, priority, source, segmentation, and prospect-to-customer conversion." },
       { id: "pipeline", title: "Pipeline and follow-up", description: "Opportunities by stage, probability, amount, and expected close; calls, meetings, tasks, and next contacts." },
@@ -209,6 +273,31 @@ const copy = {
   },
 };
 
+function Odometer({ value, title, label }: { value: number | null; title?: string; label: string }) {
+  const score = value === null ? null : Math.max(0, Math.min(100, Math.round(value)));
+  const circumference = 2 * Math.PI * 36;
+
+  return (
+    <div className="odometer" aria-label={title ? `${title}: ${score ?? "—"}${label}` : undefined}>
+      <svg viewBox="0 0 88 88" aria-hidden="true">
+        <circle className="odometer-track" cx="44" cy="44" r="36" />
+        {score !== null && (
+          <circle
+            className="odometer-value"
+            cx="44"
+            cy="44"
+            r="36"
+            strokeDasharray={circumference}
+            strokeDashoffset={circumference * (1 - score / 100)}
+          />
+        )}
+      </svg>
+      <strong>{score === null ? "—" : score}<small>{label}</small></strong>
+      {title && <span>{title}</span>}
+    </div>
+  );
+}
+
 export default function AgencyDashboard({ user, role }: { user: { name: string; email: string }; role: string }) {
   const [language, setLanguage] = useState<Language>("es");
   const [overview, setOverview] = useState<Overview | null>(null);
@@ -248,6 +337,10 @@ export default function AgencyDashboard({ user, role }: { user: { name: string; 
   const [invoiceBusy, setInvoiceBusy] = useState(false);
   const [invoiceAccountId, setInvoiceAccountId] = useState("");
   const [invoiceProjectId, setInvoiceProjectId] = useState("");
+  const [scoreGapToClose, setScoreGapToClose] = useState(0);
+  const [scenarioOpportunities, setScenarioOpportunities] = useState("");
+  const [scenarioConversionRate, setScenarioConversionRate] = useState("");
+  const [scenarioAverageTicket, setScenarioAverageTicket] = useState("");
   const t = copy[language];
 
   const loadCrm = useCallback(async () => {
@@ -582,27 +675,49 @@ export default function AgencyDashboard({ user, role }: { user: { name: string; 
   const money = (value: string | null) => value === null
     ? "—"
     : new Intl.NumberFormat(language === "es" ? "es-CO" : "en-US", { style: "currency", currency: "COP", maximumFractionDigits: 0 }).format(Number(value));
+  const proposalAcceptanceRate = overview && overview.proposalConversion.total > 0
+    ? (overview.proposalConversion.accepted / overview.proposalConversion.total) * 100
+    : null;
+  const latestDiagnosticScore = overview?.intelligence.latestAudit?.overallScore ?? null;
+  const simulatedDiagnosticScore = latestDiagnosticScore === null
+    ? null
+    : Math.round(latestDiagnosticScore + ((100 - latestDiagnosticScore) * scoreGapToClose) / 100);
+  const scenarioInputs = [scenarioOpportunities, scenarioConversionRate, scenarioAverageTicket];
+  const scenarioIsComplete = scenarioInputs.every((value) => value.trim() !== "" && Number.isFinite(Number(value)) && Number(value) >= 0)
+    && Number(scenarioOpportunities) <= 10000
+    && Number(scenarioConversionRate) <= 100
+    && Number(scenarioAverageTicket) <= 1_000_000_000;
+  const scenarioPotentialValue = scenarioIsComplete
+    ? Number(scenarioOpportunities) * (Number(scenarioConversionRate) / 100) * Number(scenarioAverageTicket)
+    : null;
+  const moduleVolumes = overview ? [
+    { label: t.audits, value: overview.intelligence.auditCount },
+    { label: t.opportunities, value: overview.counts.openOpportunities },
+    { label: t.proposals, value: overview.proposalConversion.total },
+    { label: t.activeProjects, value: overview.counts.projects },
+  ] : [];
+  const maxModuleVolume = Math.max(1, ...moduleVolumes.map((item) => item.value));
 
   return (
     <main className="agency-shell">
       <aside className="agency-sidebar">
-        <div className="agency-logo"><span>in</span><b>INNweb OS</b></div>
+        <div className="agency-logo"><span className="brand-logo-wrap"><img src="/innweb-logo.png" alt="InnWeb" /></span><b>OS</b></div>
         <nav aria-label="CRM sections">
           {t.nav.map((item, index) => (
-            <a key={item} className={index === 0 ? "selected" : ""} href={["#estado", "#ventas", "#ventas", "#propuestas", "#proyectos", "#finanzas"][index]}>
-              <i>{["⌂", "◎", "◇", "◌", "▱", "⌁"][index]}</i>{item}
+            <a key={item} className={index === 0 ? "selected" : ""} href={["#estado", "#rank-pulse", "#ventas", "#ventas", "#propuestas", "#proyectos", "#finanzas"][index]}>
+              <i>{["⌂", "✳", "◎", "◇", "◌", "▱", "⌁"][index]}</i>{item}
             </a>
           ))}
         </nav>
         <div className="agency-profile">
           <div className="avatar">IW</div>
-          <div><strong>INNweb</strong><span>{language === "es" ? "Espacio de trabajo" : "Agency workspace"}</span></div>
+          <div><strong>InnWeb</strong><span>{language === "es" ? "Espacio de trabajo" : "Agency workspace"}</span></div>
         </div>
       </aside>
 
       <section className="agency-content">
         <header className="agency-topbar">
-          <div><span className="muted">INNweb OS</span><strong>{t.product}</strong></div>
+          <div><span className="muted">InnWeb OS</span><strong>{t.product}</strong></div>
           <div className="top-actions">
             <div className="language-switch">
               <button className={language === "es" ? "active" : ""} onClick={() => setLanguage("es")}>ES</button>
@@ -618,8 +733,8 @@ export default function AgencyDashboard({ user, role }: { user: { name: string; 
         </header>
 
         <div className="agency-hero">
-          <div id="estado"><p className="eyebrow">INNWEB OS · CRM</p><h1>{t.greeting}</h1><p>{t.intro}</p></div>
-          <span className="live-pill"><i style={{ background: "#f6b95f", boxShadow: "none" }} />{t.status}</span>
+          <div id="estado"><p className="eyebrow">InnWeb OS · CRM</p><h1>{t.greeting}</h1><p>{t.intro}</p></div>
+          <span className="live-pill"><i />{t.status}</span>
         </div>
 
         <section className="metric-grid">
@@ -627,6 +742,94 @@ export default function AgencyDashboard({ user, role }: { user: { name: string; 
           <article><span>{language === "es" ? "PIPELINE ABIERTO" : "OPEN PIPELINE"}</span><strong>{overview?.counts.openOpportunities ?? "…"}</strong><small>{money(overview?.pipelineValueCop ?? null)} · COP</small></article>
           <article><span>{language === "es" ? "CLIENTES" : "CUSTOMERS"}</span><strong>{overview?.counts.customers ?? "…"}</strong><small>{language === "es" ? "Cuentas convertidas" : "Converted accounts"}</small></article>
           <article><span>{language === "es" ? "PROYECTOS ACTIVOS" : "ACTIVE PROJECTS"}</span><strong>{overview?.counts.projects ?? "…"}</strong><small>{language === "es" ? `${overview?.counts.overdueActivities ?? "…"} seguimientos vencidos` : `${overview?.counts.overdueActivities ?? "…"} overdue follow-ups`}</small></article>
+        </section>
+
+        <section className="observatory-section" id="rank-pulse" aria-labelledby="observatory-title">
+          <div className="observatory-heading">
+            <div><span>{t.measured}</span><h2 id="observatory-title">{t.observatory}</h2></div>
+            <Link href="/">{language === "es" ? "Ejecutar diagnóstico" : "Run diagnostic"} →</Link>
+          </div>
+          <div className="observatory-grid">
+            <article className="observatory-card intelligence-card">
+              <div className="section-heading"><div><span>{t.latestAudit}</span><h3>{t.diagnosticScore}</h3></div></div>
+              {overview?.intelligence.latestAudit ? (
+                <>
+                  <div className="diagnostic-score-row">
+                    <Odometer value={latestDiagnosticScore} label="/100" />
+                    <div className="diagnostic-detail">
+                      <a href={overview.intelligence.latestAudit.requestedUrl} target="_blank" rel="noreferrer">
+                        {new URL(overview.intelligence.latestAudit.requestedUrl).hostname}
+                      </a>
+                      <span>{overview.intelligence.latestAudit.classification || "—"}</span>
+                      <time dateTime={overview.intelligence.latestAudit.auditedAt}>
+                        {new Date(overview.intelligence.latestAudit.auditedAt).toLocaleDateString(language === "es" ? "es-CO" : "en-US")}
+                      </time>
+                    </div>
+                  </div>
+                  <p className="observatory-footnote">{t.heuristicNote}</p>
+                </>
+              ) : (
+                <div className="observatory-empty"><p>{t.noAudits}</p><Link href="/">{language === "es" ? "Abrir Rank Pulse" : "Open Rank Pulse"} →</Link></div>
+              )}
+            </article>
+
+            <article className="observatory-card odometer-card">
+              <div className="section-heading"><div><span>{t.measured}</span><h3>{t.auditCount}: {overview?.intelligence.auditCount ?? "…"}</h3></div></div>
+              <div className="odometer-list">
+                <Odometer value={overview?.intelligence.averageOverallScore ?? null} title={t.diagnosticScore} label="/100" />
+                <Odometer value={overview?.intelligence.averageOpportunityScore ?? null} title={t.opportunityScore} label="/100" />
+                <Odometer value={proposalAcceptanceRate} title={t.proposalAcceptance} label="%" />
+              </div>
+              <p className="observatory-footnote">{t.heuristicNote}</p>
+            </article>
+
+            <article className="observatory-card simulator-card">
+              <div className="section-heading"><div><span>RANK PULSE · {language === "es" ? "ESCENARIO" : "SCENARIO"}</span><h3>{t.scoreSimulator}</h3></div></div>
+              {latestDiagnosticScore === null ? <div className="observatory-empty"><p>{t.noAuditToSimulate}</p></div> : (
+                <>
+                  <div className="simulator-result"><span>{t.projectedDiagnostic}</span><strong>{simulatedDiagnosticScore}<small>/100</small></strong></div>
+                  <label className="range-control">
+                    <span>{t.findingsResolved}<b>{scoreGapToClose}%</b></span>
+                    <input type="range" min="0" max="100" step="5" value={scoreGapToClose} onChange={(event) => setScoreGapToClose(Number(event.target.value))} />
+                  </label>
+                  <p className="observatory-footnote">{t.scoreSimulatorNote}</p>
+                </>
+              )}
+            </article>
+          </div>
+        </section>
+
+        <section className="agency-panels infographic-panels" aria-label={t.operationalMap}>
+          <article className="pipeline-card module-infographic">
+            <div className="section-heading"><div><span>InnWeb OS · {language === "es" ? "INFOGRAFÍA INTERNA" : "INTERNAL INFOGRAPHIC"}</span><h2>{t.operationalMap}</h2></div></div>
+            <p className="observatory-footnote">{t.volumeByModule}</p>
+            <div className="module-flow">
+              {moduleVolumes.map((module, index) => (
+                <div className="module-flow-item" key={module.label}>
+                  <div className="module-flow-heading"><span>{module.label}</span><strong>{module.value}</strong></div>
+                  <div className="module-flow-track"><i style={{ width: `${module.value ? Math.max(5, (module.value / maxModuleVolume) * 100) : 0}%` }} /></div>
+                  {index < moduleVolumes.length - 1 && <span className="module-flow-arrow" aria-hidden="true">→</span>}
+                </div>
+              ))}
+            </div>
+          </article>
+          <article className="observatory-card business-simulator">
+            <div className="section-heading"><div><span>CRM · {language === "es" ? "ESCENARIO" : "SCENARIO"}</span><h3>{t.commercialSimulator}</h3></div></div>
+            <p className="estimate-label">{t.estimateOnly}</p>
+            <div className="scenario-fields">
+              <label>{t.scenarioOpportunities}<input type="number" min="0" max="10000" step="1" value={scenarioOpportunities} onChange={(event) => setScenarioOpportunities(event.target.value)} /></label>
+              <label>{t.scenarioConversion}<input type="number" min="0" max="100" step="1" value={scenarioConversionRate} onChange={(event) => setScenarioConversionRate(event.target.value)} /></label>
+              <label>{t.scenarioTicket}<input type="number" min="0" step="10000" value={scenarioAverageTicket} onChange={(event) => setScenarioAverageTicket(event.target.value)} /></label>
+            </div>
+            {overview?.historicalCloseRate.closed ? (
+              <button className="scenario-helper" type="button" onClick={() => setScenarioConversionRate(String(Math.round((overview.historicalCloseRate.won / overview.historicalCloseRate.closed) * 100)))}>
+                {t.useObservedRate} ({Math.round((overview.historicalCloseRate.won / overview.historicalCloseRate.closed) * 100)}%)
+              </button>
+            ) : (
+              <p className="observatory-footnote">{t.noObservedRate}</p>
+            )}
+            <div className="scenario-output"><span>{t.scenarioResult}</span><strong>{scenarioPotentialValue === null ? "—" : money(String(scenarioPotentialValue))}</strong></div>
+          </article>
         </section>
 
         {loadError && <p className="error" role="alert">{loadError}</p>}
@@ -864,7 +1067,7 @@ export default function AgencyDashboard({ user, role }: { user: { name: string; 
         .account-form label{display:grid;gap:7px;color:#aaaab2;font-size:12px}
         .account-form input{min-width:0;border:1px solid #ffffff1a;border-radius:9px;background:#08080b;padding:10px;color:#f5f5f7}
         .account-form select,.opportunities-table select{min-width:0;border:1px solid #ffffff1a;border-radius:9px;background:#08080b;padding:10px;color:#f5f5f7}
-        .account-form button{margin-top:14px;border:0;border-radius:9px;padding:11px 14px;background:#f5f5f7;color:#08080b;font-weight:750}
+        .account-form button{margin-top:14px;border:0;border-radius:999px;padding:11px 14px;background:#8bd313;color:#11120e;font-weight:750}
         .csv-actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:14px}
         .csv-actions button,.csv-button{border:0;border-radius:9px;padding:11px 14px;background:#ffffff14;color:#f5f5f7;font-weight:700;text-decoration:none;cursor:pointer}
         .csv-actions button:disabled{opacity:.45;cursor:not-allowed}

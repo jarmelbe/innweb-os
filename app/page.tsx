@@ -37,9 +37,9 @@ const sampleSites = [
 
 const copy = {
   en: {
-    eyebrow: "INNweb OS",
-    title: "Opportunity Finder",
-    subtitle: "Find visible website gaps. Turn them into responsible, evidence-based opportunities.",
+    eyebrow: "InnWeb Diagnostics",
+    title: "Intelligence / Rank Pulse",
+    subtitle: "See where a website stands. Turn evidence-based diagnostics into clear priorities and opportunities.",
     placeholder: "https://example.com",
     scan: "Run website audit",
     scanning: "Auditing…",
@@ -68,9 +68,9 @@ const copy = {
     no: "Not detected",
   },
   es: {
-    eyebrow: "INNweb OS",
-    title: "Buscador de Oportunidades",
-    subtitle: "Detecta brechas visibles y conviértelas en oportunidades responsables basadas en evidencia.",
+    eyebrow: "InnWeb Diagnostics",
+    title: "Intelligence / Rank Pulse",
+    subtitle: "Conoce el estado de un sitio web. Convierte diagnósticos basados en evidencia en prioridades y oportunidades claras.",
     placeholder: "https://ejemplo.com",
     scan: "Auditar sitio web",
     scanning: "Auditando…",
@@ -198,8 +198,7 @@ export default function Home() {
       <div className="orb two" />
       <header className="topbar">
         <div className="brand">
-          <span className="mark">in</span>
-          <span>{t.eyebrow}</span>
+          <span className="brand-logo-wrap home-logo"><img src="/innweb-logo.png" alt="InnWeb" /></span>
           <Link href="/dashboard" className="command-link">Command Center →</Link>
         </div>
         <div className="seg" aria-label="Language">
@@ -210,7 +209,7 @@ export default function Home() {
 
       <section className="hero">
         <div className="hero-copy">
-          <p className="kicker">AUDIT INTELLIGENCE</p>
+          <p className="kicker">{t.eyebrow}</p>
           <h1>{t.title}</h1>
           <p>{t.subtitle}</p>
         </div>
@@ -346,7 +345,7 @@ export default function Home() {
         .capture-form{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
         .capture-form label{display:grid;gap:7px;color:#aaaab2;font-size:12px}
         .capture-form input{min-width:0;border:1px solid #ffffff1a;border-radius:9px;background:#08080b;padding:10px;color:#f5f5f7}
-        .capture-form button{align-self:end;border:0;border-radius:9px;padding:11px 14px;background:#f5f5f7;color:#08080b;font-weight:750}
+        .capture-form button{align-self:end;border:0;border-radius:999px;padding:11px 14px;background:#8bd313;color:#11120e;font-weight:750}
         .capture-form button:disabled{opacity:.6}
         @media(max-width:640px){.capture-form{grid-template-columns:1fr}}
       `}</style>

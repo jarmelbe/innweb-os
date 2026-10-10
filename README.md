@@ -1,4 +1,4 @@
-# INNweb OS — Opportunity Finder™
+# InnWeb OS — Diagnostics: Intelligence / Rank Pulse
 
 A bilingual, non-invasive website audit MVP for agencies. It evaluates public page signals across performance, SEO, security, accessibility, conversion, and infrastructure, then returns recommendations and an opportunity score.
 
@@ -17,11 +17,11 @@ The home page audits one public URL at a time. Automatic prospect discovery is n
 
 The CRM data model is prepared for PostgreSQL with Prisma. It covers agency workspaces and roles, company accounts and contacts, sales opportunities and follow-ups, versioned website-audit evidence, a service catalog and proposals, project/task/time tracking, invoices and payments, referral commissions, and a change audit trail. The schema and initial migration are version-controlled in `prisma/`.
 
-**Provider decision:** Neon is the planned PostgreSQL provider for development/pilot. No account, database, provider credentials, or Vercel environment variables have been created/configured, so the migration has **not** been applied and CRM records are not being stored. Authentication, workspace membership, and role checks are implemented, but the CRM is not production-ready until a database is provisioned, migration and end-to-end tests pass, backups are configured, and production secrets are set. The Google Sheet remains an auxiliary manual CSV source; automatic Google synchronization is not enabled.
+**Current database state (verified 2026-10-10):** The existing Neon project `InnWeb`, `production` branch, and `neondb` database are provisioned. The database currently contains only a separate `playing_with_neon` sample table with random test rows; it has no InnWeb CRM tables and no `_prisma_migrations` history. Do not treat that sample table as CRM data or drop it as part of setup. Vercel's Production database variables have not been verified, and the public domain is still serving the older demo dashboard. The CRM is not live until the PR is deployed, the migration is applied, and setup/login are verified against Neon. The Google Sheet remains an auxiliary manual CSV source; automatic Google synchronization is not enabled.
 
 To connect a Neon database after it has been explicitly provisioned:
 
-1. Provision a PostgreSQL database with explicit authorization. Create a local `.env` from `.env.example` without overwriting an existing environment file, then set `DATABASE_URL` to the pooled connection string and `DIRECT_URL` to its direct connection string. Keep both credentials private and out of Git.
+1. Use the existing Neon `production` branch and `neondb` database. Create a local `.env` from `.env.example` without overwriting an existing environment file, then set `DATABASE_URL` to the pooled connection string and `DIRECT_URL` to its direct connection string. Keep both credentials private and out of Git.
 2. Run `npm run db:generate` and `npm run db:migrate:dev` to apply the versioned migration to the development database.
 3. Set a long random `INNWEB_SETUP_TOKEN`, start the app, and use `/setup` once to create the first owner and agency. Remove the setup token afterward; never put database or setup secrets in browser code or chat.
 4. Configure the pooled `DATABASE_URL`, direct `DIRECT_URL`, and a long random `INNWEB_SETUP_TOKEN` in Vercel's Production environment. Vercel's `vercel-build` applies Prisma migrations only for Production deploys, then builds Next.js; Preview builds do not run migrations. Keep Preview database credentials isolated from Production.

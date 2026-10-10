@@ -80,7 +80,7 @@ export async function POST(request: Request) {
           website: website.origin,
           type: AccountType.LEAD,
           priority,
-          source: "Opportunity Finder",
+          source: "InnWeb Diagnostics: Intelligence / Rank Pulse",
           serviceInterest: "Website improvement",
           nextFollowUpAt: parsed.data.nextFollowUpAt ? new Date(parsed.data.nextFollowUpAt) : null,
         },
