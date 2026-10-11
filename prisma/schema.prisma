@@ -1,0 +1,621 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+enum AgencyRole {
+  OWNER
+  ADMIN
+  SALES
+  PRODUCTION
+  FINANCE
+  VIEWER
+}
+
+enum AccountType {
+  LEAD
+  PROSPECT
+  CUSTOMER
+  PARTNER
+  ARCHIVED
+}
+
+enum RecordPriority {
+  LOW
+  NORMAL
+  HIGH
+  URGENT
+}
+
+enum OpportunityStage {
+  DISCOVERED
+  QUALIFIED
+  NEEDS_ANALYSIS
+  PROPOSAL
+  NEGOTIATION
+  WON
+  LOST
+}
+
+enum ActivityType {
+  CALL
+  EMAIL
+  MEETING
+  NOTE
+  TASK
+  WEBSITE_AUDIT
+  PROPOSAL_SENT
+  STATUS_CHANGE
+}
+
+enum ActivityStatus {
+  OPEN
+  IN_PROGRESS
+  COMPLETED
+  CANCELED
+}
+
+enum ProposalStatus {
+  DRAFT
+  SENT
+  VIEWED
+  ACCEPTED
+  REJECTED
+  EXPIRED
+  CANCELED
+}
+
+enum ProjectStatus {
+  PLANNING
+  ACTIVE
+  ON_HOLD
+  COMPLETED
+  CANCELED
+}
+
+enum WorkItemStatus {
+  TODO
+  IN_PROGRESS
+  BLOCKED
+  DONE
+  CANCELED
+}
+
+enum InvoiceStatus {
+  DRAFT
+  ISSUED
+  PARTIALLY_PAID
+  PAID
+  OVERDUE
+  VOID
+}
+
+enum CommissionStatus {
+  PENDING
+  APPROVED
+  PAID
+  VOID
+}
+
+model Agency {
+  id               String               @id @default(cuid())
+  name             String
+  slug             String               @unique
+  defaultCurrency  String               @default("COP")
+  timezone         String               @default("America/Bogota")
+  baseHourlyRate   Decimal              @default(100000) @db.Decimal(14, 2)
+  createdAt        DateTime             @default(now())
+  updatedAt        DateTime             @updatedAt
+  memberships      Membership[]
+  sessions         AuthSession[]
+  accounts         Account[]
+  contacts         Contact[]
+  opportunities    Opportunity[]
+  activities       Activity[]
+  services         Service[]
+  proposals        Proposal[]
+  projects         Project[]
+  tasks            WorkItem[]
+  timeEntries      TimeEntry[]
+  invoices         Invoice[]
+  payments         Payment[]
+  referralPartners ReferralPartner[]
+  commissions      ReferralCommission[]
+  websiteAudits    WebsiteAudit[]
+  auditEvents      AuditEvent[]
+}
+
+model User {
+  id               String        @id @default(cuid())
+  email            String        @unique
+  name             String
+  passwordHash     String?
+  disabledAt       DateTime?
+  lastLoginAt      DateTime?
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
+  memberships      Membership[]
+  sessions         AuthSession[]
+  ownedAccounts    Account[]     @relation("AccountOwner")
+  ownedDeals       Opportunity[] @relation("OpportunityOwner")
+  createdAudits    WebsiteAudit[] @relation("WebsiteAuditAuthor")
+  assignedActions  Activity[]    @relation("ActivityAssignee")
+  createdEvents    AuditEvent[]  @relation("AuditActor")
+  assignedTasks    WorkItem[]    @relation("TaskAssignee")
+  timeEntries      TimeEntry[]
+  authoredQuotes   Proposal[]    @relation("ProposalAuthor")
+
+  @@index([disabledAt])
+}
+
+model Membership {
+  id        String     @id @default(cuid())
+  agencyId  String
+  userId    String
+  role      AgencyRole @default(VIEWER)
+  createdAt DateTime   @default(now())
+  agency    Agency     @relation(fields: [agencyId], references: [id], onDelete: Cascade)
+  user      User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([agencyId, userId])
+  @@index([userId, role])
+}
+
+model AuthSession {
+  id        String   @id @default(cuid())
+  userId    String
+  agencyId  String
+  tokenHash String   @unique
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  agency    Agency   @relation(fields: [agencyId], references: [id], onDelete: Cascade)
+
+  @@index([userId, expiresAt])
+  @@index([agencyId, expiresAt])
+}
+
+model Account {
+  id              String          @id @default(cuid())
+  agencyId        String
+  externalId      String?
+  name            String
+  legalName       String?
+  taxId           String?
+  website         String?
+  industry        String?
+  city            String?
+  country         String          @default("CO")
+  type            AccountType     @default(LEAD)
+  priority        RecordPriority  @default(NORMAL)
+  source          String?
+  serviceInterest String?
+  notes           String?         @db.Text
+  nextFollowUpAt  DateTime?
+  lastContactAt   DateTime?
+  ownerId         String?
+  convertedAt     DateTime?
+  archivedAt      DateTime?
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+  agency          Agency          @relation(fields: [agencyId], references: [id], onDelete: Cascade)
+  owner           User?           @relation("AccountOwner", fields: [ownerId], references: [id], onDelete: SetNull)
+  contacts        Contact[]
+  opportunities   Opportunity[]
+  activities      Activity[]
+  websiteAudits   WebsiteAudit[]
+  proposals       Proposal[]
+  projects        Project[]
+  invoices        Invoice[]
+  referralPartner ReferralPartner?
+
+  @@unique([agencyId, taxId])
+  @@unique([agencyId, externalId])
+  @@index([agencyId, type, updatedAt])
+  @@index([agencyId, ownerId, type])
+  @@index([agencyId, nextFollowUpAt])
+  @@index([agencyId, name])
+}
+
+model Contact {
+  id            String        @id @default(cuid())
+  agencyId      String
+  externalId    String?
+  accountId     String?
+  firstName     String
+  lastName      String?
+  title         String?
+  email         String?
+  phone         String?
+  whatsapp      String?
+  isPrimary     Boolean       @default(false)
+  notes         String?       @db.Text
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+  agency        Agency        @relation(fields: [agencyId], references: [id], onDelete: Cascade)
+  account       Account?      @relation(fields: [accountId], references: [id], onDelete: SetNull)
+  opportunities Opportunity[]
+  activities    Activity[]
+
+  @@index([agencyId, accountId, isPrimary])
+  @@index([agencyId, email])
+  @@index([agencyId, phone])
+  @@unique([agencyId, externalId])
+}
+
+model Opportunity {
+  id                String           @id @default(cuid())
+  agencyId          String
+  externalId        String?
+  accountId         String
+  primaryContactId  String?
+  ownerId           String?
+  referralPartnerId String?
+  name              String
+  serviceName       String?
+  stage             OpportunityStage @default(DISCOVERED)
+  amount            Decimal?         @db.Decimal(14, 2)
+  currency          String           @default("COP")
+  probability       Int?
+  expectedCloseAt   DateTime?
+  actualCloseAt     DateTime?
+  lostReason        String?          @db.Text
+  notes             String?          @db.Text
+  createdAt         DateTime         @default(now())
+  updatedAt         DateTime         @updatedAt
+  agency            Agency           @relation(fields: [agencyId], references: [id], onDelete: Cascade)
+  account           Account          @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  primaryContact    Contact?         @relation(fields: [primaryContactId], references: [id], onDelete: SetNull)
+  owner             User?            @relation("OpportunityOwner", fields: [ownerId], references: [id], onDelete: SetNull)
+  referralPartner   ReferralPartner? @relation(fields: [referralPartnerId], references: [id], onDelete: SetNull)
+  activities        Activity[]
+  proposals         Proposal[]
+  projects          Project[]
+  commissions       ReferralCommission[]
+  websiteAudits    WebsiteAudit[]
+
+  @@index([agencyId, stage, expectedCloseAt])
+  @@index([agencyId, ownerId, stage])
+  @@index([agencyId, accountId, updatedAt])
+  @@unique([agencyId, externalId])
+}
+
+model Activity {
+  id            String         @id @default(cuid())
+  agencyId      String
+  externalId    String?
+  accountId     String?
+  contactId     String?
+  opportunityId String?
+  assigneeId    String?
+  type          ActivityType
+  status        ActivityStatus @default(OPEN)
+  subject       String
+  description   String?        @db.Text
+  dueAt         DateTime?
+  completedAt   DateTime?
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  agency        Agency         @relation(fields: [agencyId], references: [id], onDelete: Cascade)
+  account       Account?       @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  contact       Contact?       @relation(fields: [contactId], references: [id], onDelete: SetNull)
+  opportunity   Opportunity?   @relation(fields: [opportunityId], references: [id], onDelete: Cascade)
+  assignee      User?          @relation("ActivityAssignee", fields: [assigneeId], references: [id], onDelete: SetNull)
+
+  @@index([agencyId, status, dueAt])
+  @@index([agencyId, accountId, createdAt])
+  @@index([agencyId, opportunityId, createdAt])
+  @@index([agencyId, assigneeId, status, dueAt])
+  @@unique([agencyId, externalId])
+}
+
+model WebsiteAudit {
+  id                String       @id @default(cuid())
+  agencyId          String
+  accountId         String?
+  opportunityId     String?
+  authorId          String?
+  requestedUrl      String
+  finalUrl          String?
+  httpStatus        Int?
+  responseTimeMs    Int?
+  htmlBytes         Int?
+  overallScore      Int?
+  opportunityScore  Int?
+  classification    String?
+  scoringVersion    String
+  source            String
+  auditedAt         DateTime     @default(now())
+  signals           Json
+  findings          Json
+  recommendations   Json
+  createdAt         DateTime     @default(now())
+  agency            Agency       @relation(fields: [agencyId], references: [id], onDelete: Cascade)
+  account           Account?     @relation(fields: [accountId], references: [id], onDelete: SetNull)
+  opportunity       Opportunity? @relation(fields: [opportunityId], references: [id], onDelete: SetNull)
+  author            User?        @relation("WebsiteAuditAuthor", fields: [authorId], references: [id], onDelete: SetNull)
+
+  @@index([agencyId, accountId, auditedAt])
+  @@index([agencyId, opportunityId, auditedAt])
+  @@index([agencyId, auditedAt])
+}
+
+model Service {
+  id             String         @id @default(cuid())
+  agencyId       String
+  externalId     String?
+  name           String
+  category       String?
+  description    String?        @db.Text
+  cycle          String?
+  defaultPrice   Decimal?       @db.Decimal(14, 2)
+  estimatedCost  Decimal?       @db.Decimal(14, 2)
+  estimatedHours Decimal?       @db.Decimal(10, 2)
+  active         Boolean        @default(true)
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+  agency         Agency         @relation(fields: [agencyId], references: [id], onDelete: Cascade)
+  proposalItems  ProposalItem[]
+
+  @@unique([agencyId, name])
+  @@index([agencyId, active, category])
+  @@unique([agencyId, externalId])
+}
+
+model Proposal {
+  id             String         @id @default(cuid())
+  agencyId       String
+  externalId     String?
+  accountId      String
+  opportunityId  String?
+  authorId       String?
+  number         String
+  version        Int            @default(1)
+  title          String
+  status         ProposalStatus @default(DRAFT)
+  currency       String         @default("COP")
+  subtotal       Decimal        @default(0) @db.Decimal(14, 2)
+  discount       Decimal        @default(0) @db.Decimal(14, 2)
+  tax            Decimal        @default(0) @db.Decimal(14, 2)
+  total          Decimal        @default(0) @db.Decimal(14, 2)
+  estimatedHours Decimal?       @db.Decimal(10, 2)
+  hourlyRate     Decimal?       @db.Decimal(14, 2)
+  validUntil     DateTime?
+  sentAt         DateTime?
+  acceptedAt     DateTime?
+  rejectedAt     DateTime?
+  documentUrl    String?
+  internalNotes  String?        @db.Text
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+  agency         Agency         @relation(fields: [agencyId], references: [id], onDelete: Cascade)
+  account        Account        @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  opportunity    Opportunity?   @relation(fields: [opportunityId], references: [id], onDelete: SetNull)
+  author         User?          @relation("ProposalAuthor", fields: [authorId], references: [id], onDelete: SetNull)
+  items          ProposalItem[]
+  project        Project?
+
+  @@unique([agencyId, number, version])
+  @@index([agencyId, status, updatedAt])
+  @@index([agencyId, accountId, createdAt])
+  @@unique([agencyId, externalId])
+}
+
+model ProposalItem {
+  id          String   @id @default(cuid())
+  proposalId  String
+  serviceId   String?
+  description String
+  quantity    Decimal  @default(1) @db.Decimal(10, 2)
+  unit        String   @default("servicio")
+  unitPrice   Decimal? @db.Decimal(14, 2)
+  discount    Decimal  @default(0) @db.Decimal(14, 2)
+  total       Decimal? @db.Decimal(14, 2)
+  sortOrder   Int      @default(0)
+  proposal    Proposal @relation(fields: [proposalId], references: [id], onDelete: Cascade)
+  service     Service? @relation(fields: [serviceId], references: [id], onDelete: SetNull)
+
+  @@index([proposalId, sortOrder])
+}
+
+model Project {
+  id              String        @id @default(cuid())
+  agencyId        String
+  externalId      String?
+  accountId       String
+  opportunityId   String?
+  name            String
+  type            String?
+  status          ProjectStatus @default(PLANNING)
+  startAt         DateTime?
+  dueAt           DateTime?
+  completedAt     DateTime?
+  budget          Decimal?      @db.Decimal(14, 2)
+  plannedCost     Decimal?      @db.Decimal(14, 2)
+  actualCost      Decimal?      @db.Decimal(14, 2)
+  progress        Int           @default(0)
+  deliverablesUrl String?
+  notes           String?       @db.Text
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+  agency          Agency        @relation(fields: [agencyId], references: [id], onDelete: Cascade)
+  account         Account       @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  opportunity     Opportunity?  @relation(fields: [opportunityId], references: [id], onDelete: SetNull)
+  sourceProposalId String?      @unique
+  sourceProposal Proposal?      @relation(fields: [sourceProposalId], references: [id], onDelete: SetNull)
+  tasks           WorkItem[]
+  timeEntries     TimeEntry[]
+  invoices        Invoice[]
+
+  @@index([agencyId, status, dueAt])
+  @@index([agencyId, accountId, status])
+  @@unique([agencyId, externalId])
+}
+
+model WorkItem {
+  id            String         @id @default(cuid())
+  agencyId      String
+  externalId    String?
+  projectId     String
+  parentId      String?
+  assigneeId    String?
+  title         String
+  description   String?        @db.Text
+  status        WorkItemStatus @default(TODO)
+  priority      RecordPriority @default(NORMAL)
+  dueAt         DateTime?
+  estimateHours Decimal?       @db.Decimal(10, 2)
+  completedAt   DateTime?
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  agency        Agency         @relation(fields: [agencyId], references: [id], onDelete: Cascade)
+  project       Project        @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  parent        WorkItem?      @relation("TaskSubtasks", fields: [parentId], references: [id], onDelete: SetNull)
+  subtasks      WorkItem[]     @relation("TaskSubtasks")
+  assignee      User?          @relation("TaskAssignee", fields: [assigneeId], references: [id], onDelete: SetNull)
+  timeEntries   TimeEntry[]
+
+  @@index([agencyId, projectId, status, dueAt])
+  @@index([agencyId, assigneeId, status, dueAt])
+  @@unique([agencyId, externalId])
+}
+
+model TimeEntry {
+  id           String    @id @default(cuid())
+  agencyId     String
+  externalId   String?
+  projectId    String
+  taskId       String?
+  userId       String?
+  workDate     DateTime
+  hours        Decimal   @db.Decimal(8, 2)
+  costRate     Decimal?  @db.Decimal(14, 2)
+  billableRate Decimal?  @db.Decimal(14, 2)
+  billable     Boolean   @default(true)
+  description  String
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  agency       Agency    @relation(fields: [agencyId], references: [id], onDelete: Cascade)
+  project      Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  task         WorkItem? @relation(fields: [taskId], references: [id], onDelete: SetNull)
+  user         User?     @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([agencyId, projectId, workDate])
+  @@index([agencyId, userId, workDate])
+  @@unique([agencyId, externalId])
+}
+
+model Invoice {
+  id        String        @id @default(cuid())
+  agencyId  String
+  externalId String?
+  accountId String
+  projectId String?
+  number    String
+  status    InvoiceStatus @default(DRAFT)
+  currency  String        @default("COP")
+  subtotal  Decimal       @default(0) @db.Decimal(14, 2)
+  tax       Decimal       @default(0) @db.Decimal(14, 2)
+  total     Decimal       @default(0) @db.Decimal(14, 2)
+  issuedAt  DateTime?
+  dueAt     DateTime?
+  notes     String?       @db.Text
+  createdAt DateTime      @default(now())
+  updatedAt DateTime      @updatedAt
+  agency    Agency        @relation(fields: [agencyId], references: [id], onDelete: Cascade)
+  account   Account       @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  project   Project?      @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  payments  Payment[]
+
+  @@unique([agencyId, number])
+  @@index([agencyId, status, dueAt])
+  @@index([agencyId, accountId, issuedAt])
+  @@unique([agencyId, externalId])
+}
+
+model Payment {
+  id        String   @id @default(cuid())
+  agencyId  String
+  invoiceId String
+  amount    Decimal  @db.Decimal(14, 2)
+  paidAt    DateTime
+  method    String?
+  reference String?
+  notes     String?  @db.Text
+  createdAt DateTime @default(now())
+  agency    Agency   @relation(fields: [agencyId], references: [id], onDelete: Cascade)
+  invoice   Invoice  @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+
+  @@index([agencyId, invoiceId, paidAt])
+}
+
+model ReferralPartner {
+  id             String               @id @default(cuid())
+  agencyId       String
+  externalId     String?
+  accountId      String?              @unique
+  name           String
+  code           String
+  commissionRate Decimal              @db.Decimal(5, 2)
+  active         Boolean              @default(true)
+  notes          String?              @db.Text
+  createdAt      DateTime             @default(now())
+  updatedAt      DateTime             @updatedAt
+  agency         Agency               @relation(fields: [agencyId], references: [id], onDelete: Cascade)
+  account        Account?             @relation(fields: [accountId], references: [id], onDelete: SetNull)
+  opportunities Opportunity[]
+  commissions    ReferralCommission[]
+
+  @@unique([agencyId, code])
+  @@index([agencyId, active])
+  @@unique([agencyId, externalId])
+}
+
+model ReferralCommission {
+  id               String           @id @default(cuid())
+  agencyId         String
+  externalId       String?
+  partnerId        String
+  opportunityId    String?
+  status           CommissionStatus @default(PENDING)
+  collectedRevenue Decimal          @default(0) @db.Decimal(14, 2)
+  attributedCosts  Decimal          @default(0) @db.Decimal(14, 2)
+  netProfit        Decimal          @default(0) @db.Decimal(14, 2)
+  commissionRate   Decimal          @db.Decimal(5, 2)
+  amountDue        Decimal          @default(0) @db.Decimal(14, 2)
+  amountPaid       Decimal          @default(0) @db.Decimal(14, 2)
+  approvedAt       DateTime?
+  paidAt           DateTime?
+  notes            String?          @db.Text
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
+  agency           Agency           @relation(fields: [agencyId], references: [id], onDelete: Cascade)
+  partner          ReferralPartner  @relation(fields: [partnerId], references: [id], onDelete: Cascade)
+  opportunity      Opportunity?     @relation(fields: [opportunityId], references: [id], onDelete: SetNull)
+
+  @@index([agencyId, status, createdAt])
+  @@index([agencyId, partnerId, status])
+  @@unique([agencyId, externalId])
+}
+
+model AuditEvent {
+  id         String   @id @default(cuid())
+  agencyId   String
+  actorId    String?
+  action     String
+  entityType String
+  entityId   String?
+  metadata   Json?
+  ipAddress  String?
+  createdAt  DateTime @default(now())
+  agency     Agency   @relation(fields: [agencyId], references: [id], onDelete: Cascade)
+  actor      User?    @relation("AuditActor", fields: [actorId], references: [id], onDelete: SetNull)
+
+  @@index([agencyId, entityType, entityId, createdAt])
+  @@index([agencyId, actorId, createdAt])
+}

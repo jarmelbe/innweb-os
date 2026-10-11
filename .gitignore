@@ -1,0 +1,9 @@
+node_modules/
+.next/
+out/
+build/
+.vercel/
+.env*
+!.env.example
+*.tsbuildinfo
+AGENTS.md
