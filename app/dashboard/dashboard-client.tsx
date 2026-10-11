@@ -77,7 +77,7 @@ const copy = {
     product: "Centro de Comando",
     greeting: "CRM profesional",
     intro: "Una sola base para el ciclo comercial y operativo de InnWeb.",
-    nav: ["Estado", "Intelligence", "Ventas", "Clientes", "Propuestas", "Proyectos", "Finanzas"],
+    nav: ["Estado", "Intelligence", "Prospectos", "Clientes", "Propuestas", "Proyectos", "Finanzas"],
     scan: "Analizar un sitio",
     status: "Resumen del CRM",
     dataPolicy: "No se muestran empresas, ingresos, clientes ni métricas ficticias.",
@@ -123,6 +123,7 @@ const copy = {
     rolesTitle: "Seguridad antes de producción",
     rolesDescription: "El acceso usa sesión privada, permisos por agencia y roles Owner/Admin/Ventas/Producción/Finanzas/Lectura. No conectes datos reales hasta verificar la configuración y los respaldos de PostgreSQL.",
     accountsTitle: "Empresas y prospectos",
+    customersTitle: "Clientes",
     newAccount: "Agregar empresa",
     companyName: "Nombre de empresa",
     website: "Sitio web",
@@ -132,6 +133,7 @@ const copy = {
     followUp: "Próximo seguimiento",
     save: "Guardar prospecto",
     noAccounts: "Todavía no hay empresas en el CRM.",
+    noCustomers: "Aún no hay clientes registrados. Una cuenta pasa a cliente al ganar su oportunidad o aceptar una propuesta. También puedes importar la pestaña Clientes.",
     loadError: "No fue posible cargar los datos reales del CRM.",
     stageNames: { DISCOVERED: "Descubierto", QUALIFIED: "Calificado", NEEDS_ANALYSIS: "Análisis", PROPOSAL: "Propuesta", NEGOTIATION: "Negociación", WON: "Ganado", LOST: "Perdido" } as Record<string, string>,
     proposalTitle: "Cotizador",
@@ -176,7 +178,7 @@ const copy = {
     product: "Command Center",
     greeting: "Professional CRM",
     intro: "One source of truth for InnWeb's commercial and operational cycle.",
-    nav: ["Status", "Intelligence", "Sales", "Clients", "Proposals", "Projects", "Finance"],
+    nav: ["Status", "Intelligence", "Prospects", "Clients", "Proposals", "Projects", "Finance"],
     scan: "Audit a website",
     status: "CRM overview",
     dataPolicy: "No fictional companies, revenue, customers, or metrics are shown.",
@@ -222,6 +224,7 @@ const copy = {
     rolesTitle: "Security before production",
     rolesDescription: "Access uses private sessions, agency membership checks, and Owner/Admin/Sales/Production/Finance/Viewer roles. Verify PostgreSQL configuration and backups before using real customer data.",
     accountsTitle: "Companies and prospects",
+    customersTitle: "Customers",
     newAccount: "Add company",
     companyName: "Company name",
     website: "Website",
@@ -231,6 +234,7 @@ const copy = {
     followUp: "Next follow-up",
     save: "Save lead",
     noAccounts: "There are no company records in the CRM yet.",
+    noCustomers: "There are no customers yet. An account becomes a customer when its opportunity is won or a proposal is accepted. You can also import the Clients sheet.",
     loadError: "Could not load real CRM data.",
     stageNames: { DISCOVERED: "Discovered", QUALIFIED: "Qualified", NEEDS_ANALYSIS: "Needs analysis", PROPOSAL: "Proposal", NEGOTIATION: "Negotiation", WON: "Won", LOST: "Lost" } as Record<string, string>,
     proposalTitle: "Quote builder",
@@ -300,6 +304,7 @@ function Odometer({ value, title, label }: { value: number | null; title?: strin
 
 export default function AgencyDashboard({ user, role }: { user: { name: string; email: string }; role: string }) {
   const [language, setLanguage] = useState<Language>("es");
+  const [activeSection, setActiveSection] = useState(0);
   const [overview, setOverview] = useState<Overview | null>(null);
   const [accounts, setAccounts] = useState<CrmAccount[]>([]);
   const [opportunities, setOpportunities] = useState<Opportunity[]>([]);
@@ -344,7 +349,6 @@ export default function AgencyDashboard({ user, role }: { user: { name: string; 
   const t = copy[language];
 
   const loadCrm = useCallback(async () => {
-    setLoadError("");
     try {
       const canViewFinance = ["OWNER", "ADMIN", "FINANCE"].includes(role);
       const [summaryResponse, accountsResponse, opportunitiesResponse, proposalsResponse, projectsResponse, invoicesResponse] = await Promise.all([
@@ -362,6 +366,7 @@ export default function AgencyDashboard({ user, role }: { user: { name: string; 
       if (!summaryResponse.ok || !accountsResponse.ok || !opportunitiesResponse.ok || !proposalsResponse.ok || !projectsResponse.ok || (invoicesResponse && !invoicesResponse.ok)) {
         throw new Error(summaryData.error || accountsData.error || opportunitiesData.error || proposalsData.error || projectsData.error || invoicesData.error || t.loadError);
       }
+      setLoadError("");
       setOverview(summaryData as Overview);
       setAccounts(accountsData.items as CrmAccount[]);
       setOpportunities(opportunitiesData.items as Opportunity[]);
@@ -374,7 +379,7 @@ export default function AgencyDashboard({ user, role }: { user: { name: string; 
   }, [role, t.loadError]);
 
   useEffect(() => {
-    void loadCrm();
+    void Promise.resolve().then(loadCrm);
   }, [loadCrm]);
 
   async function createAccount(event: FormEvent<HTMLFormElement>) {
@@ -697,6 +702,8 @@ export default function AgencyDashboard({ user, role }: { user: { name: string; 
     { label: t.activeProjects, value: overview.counts.projects },
   ] : [];
   const maxModuleVolume = Math.max(1, ...moduleVolumes.map((item) => item.value));
+  const customers = accounts.filter((account) => account.type === "CUSTOMER");
+  const sectionTargets = ["estado", "rank-pulse", "prospectos", "clientes", "propuestas", "proyectos", "finanzas"];
 
   return (
     <main className="agency-shell">
@@ -704,7 +711,7 @@ export default function AgencyDashboard({ user, role }: { user: { name: string; 
         <div className="agency-logo"><span className="brand-logo-wrap"><img src="/innweb-logo.png" alt="InnWeb" /></span><b>OS</b></div>
         <nav aria-label="CRM sections">
           {t.nav.map((item, index) => (
-            <a key={item} className={index === 0 ? "selected" : ""} href={["#estado", "#rank-pulse", "#ventas", "#ventas", "#propuestas", "#proyectos", "#finanzas"][index]}>
+            <a key={item} className={index === activeSection ? "selected" : ""} href={`#${sectionTargets[index]}`} onClick={() => setActiveSection(index)}>
               <i>{["⌂", "✳", "◎", "◇", "◌", "▱", "⌁"][index]}</i>{item}
             </a>
           ))}
@@ -834,7 +841,7 @@ export default function AgencyDashboard({ user, role }: { user: { name: string; 
 
         {loadError && <p className="error" role="alert">{loadError}</p>}
 
-        <section className="opportunities-table" id="ventas">
+        <section className="opportunities-table" id="prospectos">
           <div className="section-heading"><div><span>SALES CRM</span><h2>{t.accountsTitle}</h2></div><Link href="/">{t.scan} →</Link></div>
           <form className="account-form" onSubmit={createAccount}>
           <h3>{t.newAccount}</h3>
@@ -857,7 +864,22 @@ export default function AgencyDashboard({ user, role }: { user: { name: string; 
             <td>{account._count.opportunities}</td>
           </tr>)}</tbody>
           </table></div>
-          {accounts.length === 0 && !loadError && <p>{t.noAccounts}</p>}
+          {accounts.length === 0 && !loadError && <p>{t.noAccounts} {language === "es" ? "Usa el formulario de arriba o" : "Use the form above or"} <Link href="#csv">{language === "es" ? "importa un CSV" : "import a CSV"}</Link>.</p>}
+        </section>
+
+        <section className="opportunities-table" id="clientes">
+          <div className="section-heading"><div><span>CLIENT ACCOUNTS</span><h2>{t.customersTitle}</h2></div></div>
+          <div className="table-scroll"><table><thead><tr><th>{t.companyName}</th><th>{t.website}</th><th>{language === "es" ? "Contacto principal" : "Primary contact"}</th><th>{language === "es" ? "Proyectos" : "Projects"}</th></tr></thead>
+            <tbody>{customers.map((customer) => (
+              <tr key={customer.id}>
+                <td><div className="company-cell"><span>{customer.name.slice(0, 2).toUpperCase()}</span><div><strong>{customer.name}</strong><small>{customer.priority}</small></div></div></td>
+                <td>{customer.website || "—"}</td>
+                <td>{customer.contacts[0] ? [customer.contacts[0].firstName, customer.contacts[0].lastName].filter(Boolean).join(" ") : "—"}</td>
+                <td>{projects.filter((project) => project.account.id === customer.id).length}</td>
+              </tr>
+            ))}</tbody>
+          </table></div>
+          {customers.length === 0 && !loadError && <p>{t.noCustomers} <Link href="#csv">{language === "es" ? "Ir a importación CSV" : "Go to CSV import"} →</Link></p>}
         </section>
 
         <section className="agency-panels">
@@ -1027,69 +1049,6 @@ export default function AgencyDashboard({ user, role }: { user: { name: string; 
         </section>
         <p className="demo-note">{t.dataPolicy}</p>
       </section>
-      <style jsx>{`
-        .agency-sidebar nav a {
-          width: 100%;
-          border: 0;
-          background: transparent;
-          color: #85858b;
-          padding: 11px 12px;
-          border-radius: 12px;
-          text-align: left;
-          display: flex;
-          align-items: center;
-          gap: 12px;
-          font-size: 14px;
-          text-decoration: none;
-        }
-        .agency-sidebar nav a i {
-          font-style: normal;
-          width: 18px;
-          text-align: center;
-          font-size: 17px;
-        }
-        .agency-sidebar nav a:hover,
-        .agency-sidebar nav a.selected {
-          background: #ffffff0d;
-          color: #f5f5f7;
-        }
-        .opportunities-table pre {
-          overflow-x: auto;
-          padding: 16px;
-          border-radius: 12px;
-          background: #050506;
-          color: #b7b7c0;
-          font-size: 12px;
-        }
-        .account-form{margin:22px 0;padding:18px;border:1px solid #ffffff12;border-radius:14px;background:#ffffff04}
-        .account-form h3{margin:0 0 14px;font-size:14px}
-        .account-form>div{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
-        .account-form label{display:grid;gap:7px;color:#aaaab2;font-size:12px}
-        .account-form input{min-width:0;border:1px solid #ffffff1a;border-radius:9px;background:#08080b;padding:10px;color:#f5f5f7}
-        .account-form select,.opportunities-table select{min-width:0;border:1px solid #ffffff1a;border-radius:9px;background:#08080b;padding:10px;color:#f5f5f7}
-        .account-form button{margin-top:14px;border:0;border-radius:999px;padding:11px 14px;background:#8bd313;color:#11120e;font-weight:750}
-        .csv-actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:14px}
-        .csv-actions button,.csv-button{border:0;border-radius:9px;padding:11px 14px;background:#ffffff14;color:#f5f5f7;font-weight:700;text-decoration:none;cursor:pointer}
-        .csv-actions button:disabled{opacity:.45;cursor:not-allowed}
-        .error{color:#ff9696}
-        .project-operations{padding:14px 0;border-top:1px solid #ffffff12;color:#c4c4ca}
-        .project-operations summary{cursor:pointer}
-        .project-operations ul{padding-left:20px}
-        .project-operations li{padding:6px 0}
-        .project-operations li label{display:flex;align-items:center;gap:8px}
-        .inline-form{display:flex;gap:8px;margin:10px 0}
-        .inline-form input{min-width:0;flex:1;background:#08080b;border:1px solid #ffffff1a;border-radius:8px;padding:9px;color:#f5f5f7}
-        .inline-form button{border:0;border-radius:8px;padding:9px 12px;background:#ffffff14;color:#f5f5f7}
-        @media (max-width: 760px) {
-          .agency-sidebar nav a {
-            justify-content: center;
-          }
-          .agency-sidebar nav a i {
-            display: none;
-          }
-          .account-form>div{grid-template-columns:1fr}
-        }
-      `}</style>
     </main>
   );
 }

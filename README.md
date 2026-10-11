@@ -17,15 +17,14 @@ The home page audits one public URL at a time. Automatic prospect discovery is n
 
 The CRM data model is prepared for PostgreSQL with Prisma. It covers agency workspaces and roles, company accounts and contacts, sales opportunities and follow-ups, versioned website-audit evidence, a service catalog and proposals, project/task/time tracking, invoices and payments, referral commissions, and a change audit trail. The schema and initial migration are version-controlled in `prisma/`.
 
-**Current database state (verified 2026-10-10):** The existing Neon project `InnWeb`, `production` branch, and `neondb` database are provisioned. The database currently contains only a separate `playing_with_neon` sample table with random test rows; it has no InnWeb CRM tables and no `_prisma_migrations` history. Do not treat that sample table as CRM data or drop it as part of setup. Vercel's Production database variables have not been verified, and the public domain is still serving the older demo dashboard. The CRM is not live until the PR is deployed, the migration is applied, and setup/login are verified against Neon. The Google Sheet remains an auxiliary manual CSV source; automatic Google synchronization is not enabled.
+**Production readiness (verified 2026-10-11):** The Neon `InnWeb` project's `production` branch / `neondb` database has been reset and the versioned CRM migration has been applied. The `public` schema contains the CRM tables and migration history but no CRM records yet; Neon-managed `neon_auth` tables were preserved. Vercel Production has `DATABASE_URL` and `DIRECT_URL`; `INNWEB_SETUP_TOKEN` and initial Owner setup still need to be completed. The merged application has not yet been confirmed on `os.innweb.co`, which was still serving the previous dashboard at last verification. The Google Sheet remains an auxiliary manual CSV source; automatic Google synchronization is not enabled.
 
 To connect a Neon database after it has been explicitly provisioned:
 
-1. Use the existing Neon `production` branch and `neondb` database. Create a local `.env` from `.env.example` without overwriting an existing environment file, then set `DATABASE_URL` to the pooled connection string and `DIRECT_URL` to its direct connection string. Keep both credentials private and out of Git.
-2. Run `npm run db:generate` and `npm run db:migrate:dev` to apply the versioned migration to the development database.
-3. Set a long random `INNWEB_SETUP_TOKEN`, start the app, and use `/setup` once to create the first owner and agency. Remove the setup token afterward; never put database or setup secrets in browser code or chat.
-4. Configure the pooled `DATABASE_URL`, direct `DIRECT_URL`, and a long random `INNWEB_SETUP_TOKEN` in Vercel's Production environment. Vercel's `vercel-build` applies Prisma migrations only for Production deploys, then builds Next.js; Preview builds do not run migrations. Keep Preview database credentials isolated from Production.
-5. Verify login, agency isolation, role restrictions, CSV preview/import, and the full audit → opportunity → proposal → project → task/time-entry flow against the database before using live records.
+1. Keep development and production databases separate. Create a local `.env` from `.env.example` without overwriting an existing environment file, then use a **development Neon branch/database** for `DATABASE_URL` (pooled) and `DIRECT_URL` (direct). Never point `npm run db:migrate:dev` at Production.
+2. Run `npm run db:generate` and `npm run db:migrate:dev` only against the development database. Production builds run `prisma migrate deploy` through `npm run vercel-build` when `VERCEL_ENV=production`; Preview builds do not run migrations and must use isolated Preview credentials.
+3. Before the first production release, set a long random `INNWEB_SETUP_TOKEN` in Vercel Production. Deploy the merged `main` branch, open `/setup` once to create the first Owner and agency, then remove the setup token and redeploy. Never put database or setup secrets in browser code, Git, or chat.
+4. Verify the production deployment, login, agency isolation, role restrictions, CSV preview/import, and the audit → opportunity → proposal → project → task/time-entry flow before using live records. The current Production database starts empty; import approved CSV records or add them through the CRM rather than relying on demo data.
 
 `npm run db:studio` opens Prisma Studio for local database inspection. Without `DATABASE_URL`, the app shows the connection/setup state and does not invent CRM records.
 
@@ -66,7 +65,7 @@ Change `language` to `es` for Spanish recommendations.
 
 ## Public deployment
 
-Import this repository into Vercel and deploy it as a Next.js project. To use `os.innweb.co`, add that hostname to the Vercel project and create the exact DNS record Vercel provides at the domain's DNS provider. Keep the existing `innweb.co` apex records unchanged. Set `NEXT_PUBLIC_SITE_URL=https://os.innweb.co` in the Vercel project for canonical metadata.
+The repository's merged `main` branch is the deployment source. Confirm that Vercel's `innweb/innweb-os` project is connected to `main`, has Production `DATABASE_URL` and `DIRECT_URL`, and has `NEXT_PUBLIC_SITE_URL=https://os.innweb.co`. Set the one-time `INNWEB_SETUP_TOKEN` before the first release as described above. Verify the deployment and `/setup` before announcing the site. If the custom domain is not already attached, add `os.innweb.co` to the Vercel project and configure only the exact DNS record Vercel provides; keep existing `innweb.co` apex records unchanged.
 
 
 ## Publicar en GitHub
