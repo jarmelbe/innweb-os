@@ -11,6 +11,8 @@ function run(script, args) {
   execFileSync(process.execPath, [script, ...args], { stdio: "inherit", env: process.env });
 }
 
+run(prismaCli, ["generate"]);
+
 if (process.env.VERCEL_ENV === "production") {
   if (!process.env.DATABASE_URL || !process.env.DIRECT_URL) {
     throw new Error("Production builds require DATABASE_URL and DIRECT_URL to apply database migrations.");
