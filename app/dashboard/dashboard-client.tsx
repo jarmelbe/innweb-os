@@ -71,6 +71,20 @@ type Invoice = {
   project: { name: string } | null;
 };
 type CsvPreview = { totalRows: number; validRows: number; errors: { row: number; message: string }[]; error?: string };
+type ProspectCandidate = {
+  externalId: string;
+  name: string;
+  category: string;
+  city: string;
+  website: string | null;
+  email: string | null;
+  phone: string | null;
+  address: string | null;
+  latitude: number | null;
+  longitude: number | null;
+  sourceUrl: string;
+  alreadyImported: boolean;
+};
 
 const copy = {
   es: {
@@ -124,6 +138,28 @@ const copy = {
     rolesDescription: "El acceso usa sesión privada, permisos por agencia y roles Owner/Admin/Ventas/Producción/Finanzas/Lectura. No conectes datos reales hasta verificar la configuración y los respaldos de PostgreSQL.",
     accountsTitle: "Empresas y prospectos",
     customersTitle: "Clientes",
+    discoverTitle: "Buscar negocios potenciales",
+    discoverDescription: "Encuentra negocios publicados en OpenStreetMap y guárdalos como prospectos para validar su encaje.",
+    city: "Ciudad de Colombia",
+    category: "Sector",
+    allBusinesses: "Todos los negocios",
+    healthBusinesses: "Salud",
+    foodBusinesses: "Restaurantes y cafés",
+    hospitalityBusinesses: "Hoteles y turismo",
+    professionalBusinesses: "Servicios profesionales",
+    retailBusinesses: "Comercio",
+    searchProspects: "Buscar prospectos",
+    searchingProspects: "Buscando…",
+    selectProspects: "Seleccionados",
+    importProspects: "Agregar seleccionados al CRM",
+    importingProspects: "Agregando…",
+    noDiscoveryResults: "No se encontraron negocios en esa ciudad. Prueba el nombre del municipio o un sector diferente.",
+    alreadyImported: "Ya está en el CRM",
+    noWebsite: "Sitio no listado",
+    prospectImported: "prospectos agregados",
+    duplicatesSkipped: "duplicados omitidos",
+    openListing: "Ver fuente",
+    osmAttribution: "Datos del listado comunitario de",
     newAccount: "Agregar empresa",
     companyName: "Nombre de empresa",
     website: "Sitio web",
@@ -225,6 +261,28 @@ const copy = {
     rolesDescription: "Access uses private sessions, agency membership checks, and Owner/Admin/Sales/Production/Finance/Viewer roles. Verify PostgreSQL configuration and backups before using real customer data.",
     accountsTitle: "Companies and prospects",
     customersTitle: "Customers",
+    discoverTitle: "Find potential customers",
+    discoverDescription: "Find businesses listed in OpenStreetMap and save them as prospects to validate their fit.",
+    city: "City in Colombia",
+    category: "Industry",
+    allBusinesses: "All businesses",
+    healthBusinesses: "Healthcare",
+    foodBusinesses: "Restaurants and cafes",
+    hospitalityBusinesses: "Hotels and tourism",
+    professionalBusinesses: "Professional services",
+    retailBusinesses: "Retail",
+    searchProspects: "Find prospects",
+    searchingProspects: "Searching…",
+    selectProspects: "Selected",
+    importProspects: "Add selected to CRM",
+    importingProspects: "Adding…",
+    noDiscoveryResults: "No businesses were found in that city. Try the municipality name or another industry.",
+    alreadyImported: "Already in CRM",
+    noWebsite: "Website not listed",
+    prospectImported: "prospects added",
+    duplicatesSkipped: "duplicates skipped",
+    openListing: "View source",
+    osmAttribution: "Community directory data from",
     newAccount: "Add company",
     companyName: "Company name",
     website: "Website",
@@ -318,6 +376,13 @@ export default function AgencyDashboard({ user, role }: { user: { name: string; 
   const [contactEmail, setContactEmail] = useState("");
   const [contactPhone, setContactPhone] = useState("");
   const [followUp, setFollowUp] = useState("");
+  const [discoveryCity, setDiscoveryCity] = useState("");
+  const [discoveryCategory, setDiscoveryCategory] = useState("all");
+  const [prospectCandidates, setProspectCandidates] = useState<ProspectCandidate[]>([]);
+  const [selectedProspects, setSelectedProspects] = useState<string[]>([]);
+  const [prospectMessage, setProspectMessage] = useState("");
+  const [discoveringProspects, setDiscoveringProspects] = useState(false);
+  const [importingProspects, setImportingProspects] = useState(false);
   const [formError, setFormError] = useState("");
   const [saving, setSaving] = useState(false);
   const [selectedAccount, setSelectedAccount] = useState("");
@@ -411,6 +476,60 @@ export default function AgencyDashboard({ user, role }: { user: { name: string; 
       setFormError(error instanceof Error ? error.message : t.loadError);
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function discoverProspects(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setDiscoveringProspects(true);
+    setProspectMessage("");
+    setProspectCandidates([]);
+    setSelectedProspects([]);
+    try {
+      const response = await fetch("/api/crm/prospects/discover", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ city: discoveryCity, category: discoveryCategory }),
+      });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || t.loadError);
+      const candidates = result.candidates as ProspectCandidate[];
+      setProspectCandidates(candidates);
+      setSelectedProspects(candidates.filter((candidate) => !candidate.alreadyImported).slice(0, 20).map((candidate) => candidate.externalId));
+      if (candidates.length === 0) setProspectMessage(t.noDiscoveryResults);
+    } catch (error) {
+      setProspectMessage(error instanceof Error ? error.message : t.loadError);
+    } finally {
+      setDiscoveringProspects(false);
+    }
+  }
+
+  async function importDiscoveredProspects() {
+    const candidates = prospectCandidates.filter((candidate) => selectedProspects.includes(candidate.externalId));
+    if (candidates.length === 0) return;
+    setImportingProspects(true);
+    setProspectMessage("");
+    try {
+      const response = await fetch("/api/crm/prospects/discover", {
+        method: "PUT",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          city: discoveryCity,
+          externalIds: candidates.map((candidate) => candidate.externalId),
+        }),
+      });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || t.loadError);
+      setProspectMessage(`${result.imported} ${t.prospectImported}; ${result.duplicates} ${t.duplicatesSkipped}.`);
+      setProspectCandidates((current) => current.map((candidate) => (
+        selectedProspects.includes(candidate.externalId) ? { ...candidate, alreadyImported: true } : candidate
+      )));
+      setSelectedProspects([]);
+      await loadCrm();
+    } catch (error) {
+      setProspectMessage(error instanceof Error ? error.message : t.loadError);
+    } finally {
+      setImportingProspects(false);
     }
   }
 
@@ -703,6 +822,8 @@ export default function AgencyDashboard({ user, role }: { user: { name: string; 
   ] : [];
   const maxModuleVolume = Math.max(1, ...moduleVolumes.map((item) => item.value));
   const customers = accounts.filter((account) => account.type === "CUSTOMER");
+  const prospects = accounts.filter((account) => account.type === "LEAD" || account.type === "PROSPECT");
+  const canManageProspects = ["OWNER", "ADMIN", "SALES"].includes(role);
   const sectionTargets = ["estado", "rank-pulse", "prospectos", "clientes", "propuestas", "proyectos", "finanzas"];
 
   return (
@@ -843,6 +964,68 @@ export default function AgencyDashboard({ user, role }: { user: { name: string; 
 
         <section className="opportunities-table" id="prospectos">
           <div className="section-heading"><div><span>SALES CRM</span><h2>{t.accountsTitle}</h2></div><Link href="/">{t.scan} →</Link></div>
+          {canManageProspects && (
+            <div className="prospect-discovery">
+              <div>
+                <h3>{t.discoverTitle}</h3>
+                <p>{t.discoverDescription}</p>
+              </div>
+              <form className="discovery-form" onSubmit={discoverProspects}>
+                <label>{t.city}<input required minLength={2} maxLength={80} pattern="[A-Za-zÀ-ÿ .'-]+" value={discoveryCity} onChange={(event) => setDiscoveryCity(event.target.value)} placeholder="Bogotá, Medellín, Cali…" /></label>
+                <label>{t.category}
+                  <select value={discoveryCategory} onChange={(event) => setDiscoveryCategory(event.target.value)}>
+                    <option value="all">{t.allBusinesses}</option>
+                    <option value="health">{t.healthBusinesses}</option>
+                    <option value="food">{t.foodBusinesses}</option>
+                    <option value="hospitality">{t.hospitalityBusinesses}</option>
+                    <option value="professional">{t.professionalBusinesses}</option>
+                    <option value="retail">{t.retailBusinesses}</option>
+                  </select>
+                </label>
+                <button disabled={discoveringProspects}>{discoveringProspects ? t.searchingProspects : t.searchProspects}</button>
+              </form>
+              {prospectMessage && <p className="prospect-message" role="status">{prospectMessage}</p>}
+              {prospectCandidates.length > 0 && (
+                <>
+                  <div className="discovery-results-heading">
+                    <strong>{prospectCandidates.length} · {discoveryCity}</strong>
+                    <span>{t.selectProspects} ({selectedProspects.length}/20)</span>
+                  </div>
+                  <ul className="prospect-results">
+                    {prospectCandidates.map((candidate) => (
+                      <li key={candidate.externalId}>
+                        <label>
+                          <input
+                            type="checkbox"
+                            checked={selectedProspects.includes(candidate.externalId)}
+                            disabled={candidate.alreadyImported || (!selectedProspects.includes(candidate.externalId) && selectedProspects.length >= 20)}
+                            onChange={(event) => setSelectedProspects((current) => event.target.checked
+                              ? [...current, candidate.externalId]
+                              : current.filter((id) => id !== candidate.externalId))}
+                          />
+                          <span className="prospect-result-main">
+                            <strong>{candidate.name}</strong>
+                            <small>{candidate.category} · {candidate.address || candidate.city}</small>
+                            <small>{candidate.website || t.noWebsite}{candidate.email ? ` · ${candidate.email}` : ""}{candidate.phone ? ` · ${candidate.phone}` : ""}</small>
+                          </span>
+                        </label>
+                        <span className="prospect-result-actions">
+                          {candidate.alreadyImported && <small>{t.alreadyImported}</small>}
+                          <a href={candidate.sourceUrl} target="_blank" rel="noreferrer">{t.openListing}</a>
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                  <div className="discovery-footer">
+                    <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer">{t.osmAttribution} OpenStreetMap</a>
+                    <button className="auth-submit" type="button" disabled={!selectedProspects.length || importingProspects} onClick={() => void importDiscoveredProspects()}>
+                      {importingProspects ? t.importingProspects : `${t.importProspects} (${selectedProspects.length})`}
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
+          )}
           <form className="account-form" onSubmit={createAccount}>
           <h3>{t.newAccount}</h3>
           <div>
@@ -857,14 +1040,14 @@ export default function AgencyDashboard({ user, role }: { user: { name: string; 
           {formError && <p className="error" role="alert">{formError}</p>}
           </form>
           <div className="table-scroll"><table><thead><tr><th>{t.companyName}</th><th>{language === "es" ? "Tipo" : "Type"}</th><th>{language === "es" ? "Prioridad" : "Priority"}</th><th>{language === "es" ? "Contacto" : "Contact"}</th><th>{language === "es" ? "Oportunidades" : "Opportunities"}</th></tr></thead>
-          <tbody>{accounts.map((account) => <tr key={account.id}>
+          <tbody>{prospects.map((account) => <tr key={account.id}>
             <td><div className="company-cell"><span>{account.name.slice(0, 2).toUpperCase()}</span><div><strong>{account.name}</strong><small>{account.website || "—"}</small></div></div></td>
             <td>{account.type}</td><td>{account.priority}</td>
             <td>{account.contacts[0] ? [account.contacts[0].firstName, account.contacts[0].lastName].filter(Boolean).join(" ") : "—"}</td>
             <td>{account._count.opportunities}</td>
           </tr>)}</tbody>
           </table></div>
-          {accounts.length === 0 && !loadError && <p>{t.noAccounts} {language === "es" ? "Usa el formulario de arriba o" : "Use the form above or"} <Link href="#csv">{language === "es" ? "importa un CSV" : "import a CSV"}</Link>.</p>}
+          {prospects.length === 0 && !loadError && <p>{t.noAccounts} {language === "es" ? "Usa el formulario de arriba o" : "Use the form above or"} <Link href="#csv">{language === "es" ? "importa un CSV" : "import a CSV"}</Link>.</p>}
         </section>
 
         <section className="opportunities-table" id="clientes">

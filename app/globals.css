@@ -1620,6 +1620,173 @@ main.finder-shell {
   text-decoration: underline;
 }
 
+.prospect-discovery {
+  margin: 22px 0;
+  border: 1px solid rgba(139, 211, 19, .24);
+  border-radius: 16px;
+  padding: 18px;
+  background: linear-gradient(145deg, rgba(139, 211, 19, .07), rgba(244, 244, 232, .025));
+}
+
+.prospect-discovery h3 {
+  margin: 0;
+  font-size: 16px;
+}
+
+.prospect-discovery > div:first-child p {
+  margin: 8px 0 0;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.discovery-form {
+  display: grid;
+  grid-template-columns: minmax(180px, 1fr) minmax(180px, .8fr) auto;
+  align-items: end;
+  gap: 12px;
+  margin-top: 16px;
+}
+
+.discovery-form label {
+  display: grid;
+  gap: 7px;
+  color: #c9c9bf;
+  font-size: 12px;
+}
+
+.discovery-form input,
+.discovery-form select {
+  min-width: 0;
+  border: 1px solid rgba(244, 244, 232, .18);
+  border-radius: 9px;
+  background: #11120e;
+  padding: 10px;
+  color: var(--innweb-paper);
+}
+
+.discovery-form button {
+  min-height: 39px;
+  border: 0;
+  border-radius: 999px;
+  padding: 10px 15px;
+  background: var(--innweb-lime);
+  color: var(--innweb-ink);
+  font-size: 12px;
+  font-weight: 750;
+  cursor: pointer;
+}
+
+.discovery-form button:disabled,
+.discovery-footer button:disabled {
+  opacity: .5;
+  cursor: not-allowed;
+}
+
+.prospect-message {
+  margin: 14px 0 0;
+  color: #d5e8bb;
+  font-size: 12px;
+}
+
+.discovery-results-heading {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 18px;
+  color: var(--innweb-paper);
+  font-size: 12px;
+}
+
+.discovery-results-heading span {
+  color: var(--muted);
+}
+
+.prospect-results {
+  display: grid;
+  max-height: 420px;
+  overflow: auto;
+  margin: 10px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.prospect-results li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  border-top: 1px solid var(--line);
+  padding: 12px 2px;
+}
+
+.prospect-results li > label {
+  display: flex;
+  min-width: 0;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.prospect-results input[type="checkbox"] {
+  flex: 0 0 auto;
+  margin-top: 3px;
+  accent-color: var(--innweb-lime);
+}
+
+.prospect-result-main {
+  display: grid;
+  min-width: 0;
+  gap: 4px;
+}
+
+.prospect-result-main strong {
+  overflow-wrap: anywhere;
+  font-size: 13px;
+}
+
+.prospect-result-main small,
+.prospect-result-actions small {
+  overflow-wrap: anywhere;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+.prospect-result-actions {
+  display: flex;
+  flex: 0 0 auto;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 6px;
+}
+
+.prospect-result-actions a,
+.discovery-footer > a {
+  color: var(--innweb-lime);
+  font-size: 11px;
+  text-decoration: none;
+}
+
+.prospect-result-actions a:hover,
+.discovery-footer > a:hover {
+  text-decoration: underline;
+}
+
+.discovery-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  border-top: 1px solid var(--line);
+  padding-top: 14px;
+}
+
+.discovery-footer .auth-submit {
+  flex: 0 0 auto;
+  border: 0;
+  cursor: pointer;
+}
+
 .search button,
 .auth-submit {
   background: var(--innweb-lime);
@@ -1751,5 +1918,18 @@ main.finder-shell {
 
   .account-form > div {
     grid-template-columns: 1fr;
+  }
+
+  .discovery-form {
+    grid-template-columns: 1fr;
+  }
+
+  .prospect-results li {
+    align-items: flex-start;
+  }
+
+  .discovery-footer {
+    align-items: flex-start;
+    flex-direction: column;
   }
 }
