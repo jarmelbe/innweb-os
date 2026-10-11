@@ -7,7 +7,7 @@
     "build": "next build",
     "vercel-build": "node scripts/vercel-build.cjs",
     "start": "next start",
-    "lint": "next lint",
+    "lint": "eslint . --ext .ts,.tsx",
     "db:generate": "prisma generate",
     "db:migrate": "prisma migrate deploy",
     "db:migrate:dev": "prisma migrate dev",
@@ -25,7 +25,9 @@
     "@types/node": "latest",
     "@types/react": "latest",
     "@types/react-dom": "latest",
+    "eslint": "^10.12.0",
     "prisma": "^6.12.0",
-    "typescript": "latest"
+    "typescript": "latest",
+    "typescript-eslint": "^8.71.1"
   }
 }

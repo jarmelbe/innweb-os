@@ -127,7 +127,16 @@ export default function Home() {
   }
 
   useEffect(() => {
-    void checkSession();
+    let active = true;
+    fetch("/api/auth/session")
+      .then(async (response) => ({ response, session: await response.json() }))
+      .then(({ response, session }) => {
+        if (active) setAuthenticated(response.ok && session.authenticated === true);
+      })
+      .catch(() => {
+        if (active) setAuthenticated(false);
+      });
+    return () => { active = false; };
   }, []);
 
   async function runAudit(targetUrl = url) {

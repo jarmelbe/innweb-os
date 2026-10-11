@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { getAuthContext } from "@/lib/auth";
+import { getAuthContext, type AuthContext } from "@/lib/auth";
 import AgencyDashboard from "./dashboard-client";
 
 export const dynamic = "force-dynamic";
@@ -20,12 +20,10 @@ export default async function DashboardPage() {
     );
   }
 
+  let context: AuthContext | null;
   try {
-    const context = await getAuthContext();
-    if (!context) redirect("/login");
-    return <AgencyDashboard user={{ name: context.name, email: context.email }} role={context.role} />;
+    context = await getAuthContext();
   } catch (error) {
-    if (error && typeof error === "object" && "digest" in error) throw error;
     console.error("Dashboard could not load CRM session", error);
     return (
       <main className="auth-shell">
@@ -39,4 +37,6 @@ export default async function DashboardPage() {
       </main>
     );
   }
+  if (!context) redirect("/login");
+  return <AgencyDashboard user={{ name: context.name, email: context.email }} role={context.role} />;
 }
