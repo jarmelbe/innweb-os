@@ -58,6 +58,13 @@ external IDs, legacy templates, country preservation and a **synthetic** 121-row
 batch. Real PostgreSQL concurrency, authentication and production deployment still
 need a configured staging environment before using live prospect records.
 
+Vercel also runs these regression tests before building or applying production
+migrations, through `vercel.json` and `scripts/vercel-build.cjs`. A failed test
+stops the release even when GitHub Actions is delayed. An authorized deployment
+can set the build-only flag `INNWEB_VERIFY_RECORD_COUNTS=1` to emit aggregate CRM
+counts and verify the existing migration checksums in a read-only transaction;
+this never prints connection credentials or individual prospect details.
+
 The account CSV templates now export optional `País`, `Industria` and website
 fields. `Pais` and `Sector` are accepted aliases. Country names in Spanish/English
 or ISO alpha-2 codes are normalized without assuming Colombia. A new legacy row

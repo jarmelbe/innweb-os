@@ -1,5 +1,5 @@
 const { execFileSync } = require("node:child_process");
-const { existsSync } = require("node:fs");
+const { existsSync, readdirSync } = require("node:fs");
 const path = require("node:path");
 
 const bin = (name) => path.join(process.cwd(), "node_modules", name);
@@ -12,6 +12,16 @@ function run(script, args) {
 }
 
 run(prismaCli, ["generate"]);
+
+const tests = readdirSync(path.join(process.cwd(), "tests"))
+  .filter((name) => name.endsWith(".test.mjs"))
+  .map((name) => path.join("tests", name));
+if (tests.length === 0) throw new Error("CSV regression tests were not found.");
+execFileSync(process.execPath, ["--test", ...tests], { stdio: "inherit", env: process.env });
+
+if (process.env.INNWEB_VERIFY_RECORD_COUNTS === "1") {
+  run(path.join(process.cwd(), "scripts/verify-crm-state.cjs"), []);
+}
 
 if (process.env.VERCEL_ENV === "production") {
   if (!process.env.DATABASE_URL || !process.env.DIRECT_URL) {
