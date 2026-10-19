@@ -70,7 +70,7 @@ type Invoice = {
   account: { name: string };
   project: { name: string } | null;
 };
-type CsvPreview = { totalRows: number; validRows: number; errors: { row: number; message: string }[]; error?: string };
+type CsvPreview = { totalRows: number; validRows: number; created?: number; updated?: number; errors: { row: number; message: string }[]; error?: string };
 type ProspectCandidate = {
   externalId: string;
   name: string;
@@ -779,13 +779,13 @@ export default function AgencyDashboard({ user, role }: { user: { name: string; 
         setCsvPreview(result);
         if (commit && response.ok) {
           setCsvMessage(language === "es"
-            ? `Importación completada: ${result.validRows} filas.`
-            : `Import completed: ${result.validRows} rows.`);
+            ? `Importación completada: ${result.created ?? 0} registros nuevos y ${result.updated ?? 0} actualizados.`
+            : `Import completed: ${result.created ?? 0} new records and ${result.updated ?? 0} updated.`);
           await loadCrm();
         } else if (!commit) {
           setCsvMessage(language === "es"
-            ? `Vista previa: ${result.validRows} de ${result.totalRows} filas válidas.`
-            : `Preview: ${result.validRows} of ${result.totalRows} rows are valid.`);
+            ? `Vista previa: ${result.validRows} de ${result.totalRows} filas válidas; ${result.created ?? 0} registros nuevos y ${result.updated ?? 0} existentes.`
+            : `Preview: ${result.validRows} of ${result.totalRows} rows are valid; ${result.created ?? 0} new records and ${result.updated ?? 0} existing.`);
         } else {
           setCsvMessage(result.error || (language === "es" ? "Corrige los errores antes de importar." : "Fix errors before importing."));
         }

@@ -1,4 +1,4 @@
-name: NodeJS with Webpack
+name: Validate InnWeb OS
 
 on:
   push:
@@ -10,9 +10,12 @@ jobs:
   build:
     runs-on: ubuntu-latest
 
+    permissions:
+      contents: read
+
     strategy:
       matrix:
-        node-version: [18.x, 20.x, 22.x]
+        node-version: [22.x, 24.x]
 
     steps:
     - uses: actions/checkout@v4
@@ -22,7 +25,17 @@ jobs:
       with:
         node-version: ${{ matrix.node-version }}
 
-    - name: Build
+    - name: Install locked dependencies
+      run: npm ci
+
+    - name: Generate Prisma client
+      run: npm run db:generate
+      env:
+        DATABASE_URL: postgresql://test:test@127.0.0.1:5432/innweb_ci
+        DIRECT_URL: postgresql://test:test@127.0.0.1:5432/innweb_ci
+
+    - name: Validate CSV imports and application
       run: |
-        npm install
-        npx webpack
+        npm test
+        npm run lint
+        npm run build -- --webpack

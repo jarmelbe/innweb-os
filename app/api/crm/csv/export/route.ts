@@ -74,6 +74,8 @@ export async function GET(request: Request) {
             Teléfono: contact?.phone || "",
             "Teléfono/WhatsApp": contact?.whatsapp || contact?.phone || "",
             "Sitio web": account.website || "",
+            Industria: account.industry || "",
+            País: account.country || "",
             "Servicio solicitado": account.serviceInterest || "",
             Servicio: account.serviceInterest || "",
             Fuente: account.source || "",
