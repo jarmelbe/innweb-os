@@ -6,8 +6,9 @@ import { createHash } from "node:crypto";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { parseCsv } from "@/lib/csv";
+import { accountImportIssues, importCountry } from "@/lib/csv-import";
 import { requireCrmUser, unavailable } from "@/lib/crm";
-import { dataSheetNames, importableDataSheetNames, sheetHeaders, type DataSheetName } from "@/lib/sheet-config";
+import { dataSheetNames, importableDataSheetNames, optionalImportHeaders, sheetHeaders, type DataSheetName } from "@/lib/sheet-config";
 import { prisma } from "@/lib/prisma";
 
 export const dynamic = "force-dynamic";
@@ -123,10 +124,12 @@ const taskStatusAliases: Record<string, WorkItemStatus> = {
 async function findByIdOrExternal<T extends { id: string }>(
   agencyId: string,
   id: string,
-  find: (where: { agencyId: string; OR: Array<{ id?: string; externalId?: string }> }) => Promise<T | null>,
+  find: (where: { agencyId: string; OR: Array<{ id?: string; externalId?: string }> }) => Promise<T[]>,
 ): Promise<T | null> {
   if (!id) return null;
-  return find({ agencyId, OR: [{ id }, { externalId: id }] });
+  const matches = await find({ agencyId, OR: [{ id }, { externalId: id }] });
+  if (matches.length > 1) throw new Error("ID is ambiguous: it matches different internal and external records.");
+  return matches[0] || null;
 }
 
 function splitName(fullName: string) {
@@ -147,31 +150,33 @@ async function applyRow(
   sheet: DataSheetName,
   row: Record<string, string>,
   commit: boolean,
-): Promise<{ kind: "created" | "updated" }> {
+): Promise<{ kind: "created" | "updated"; targetId?: string }> {
   const externalId = value(row, "ID") || (sheet === "Referidos" ? value(row, "Partner ID") : "");
   if (!externalId) throw new Error("ID is required for safe, repeatable imports.");
 
   const accountForSheet = async () => {
     const accountId = value(row, "Prospecto ID") || value(row, "Cliente ID") || value(row, "Organización o lead ID");
-    const account = await findByIdOrExternal(agencyId, accountId, (where) => transaction.account.findFirst({ where }));
+    const account = await findByIdOrExternal(agencyId, accountId, (where) => transaction.account.findMany({ where }));
     if (!account) throw new Error("Referenced account was not found in this agency.");
     return account;
   };
   const projectForSheet = async () => {
-    const project = await findByIdOrExternal(agencyId, value(row, "Proyecto ID"), (where) => transaction.project.findFirst({ where }));
+    const project = await findByIdOrExternal(agencyId, value(row, "Proyecto ID"), (where) => transaction.project.findMany({ where }));
     if (!project) throw new Error("Referenced project was not found in this agency.");
     return project;
   };
   switch (sheet) {
     case "Prospectos":
     case "Clientes": {
-      const existingAccount = await transaction.account.findFirst({
-        where: { agencyId, OR: [{ externalId }, { id: externalId }] }, select: { id: true },
-      });
+      const existingAccount = await findByIdOrExternal(agencyId, externalId, (where) => transaction.account.findMany({
+        where, select: { id: true },
+      }));
       const customer = sheet === "Clientes";
       const accountName = value(row, customer ? "Razón social" : "Empresa");
       if (accountName.length < 2 || accountName.length > 200) throw new Error("Company name must contain 2–200 characters.");
       const website = value(row, "Sitio web");
+      const country = importCountry(value(row, "País"));
+      const industry = value(row, "Industria");
       if (website) {
         try {
           new URL(website);
@@ -202,58 +207,69 @@ async function applyRow(
         throw new Error("Primary contact email is invalid.");
       }
       const contactPhone = value(row, "Teléfono/WhatsApp") || value(row, "Teléfono");
+      const hasPrimaryContact = Boolean(primaryContact || contactEmail || contactPhone);
+      const primaryContacts = hasPrimaryContact && existingAccount ? await transaction.contact.findMany({
+        where: { agencyId, accountId: existingAccount.id, isPrimary: true }, select: { id: true },
+      }) : [];
+      if (primaryContacts.length > 1) throw new Error("Account has multiple primary contacts; reconcile them before importing.");
       if (commit) {
-        const savedAccount = await transaction.account.upsert({
-          where: { id: existingAccount?.id || "__missing__" },
-          create: {
+        const createData = {
             agencyId, externalId, name: accountName, legalName: value(row, "Razón social") || null,
-            website: website || null, taxId: value(row, "NIT") || null,
+            website: website || null, industry: industry || null, country: country ?? "", taxId: value(row, "NIT") || null,
             city: value(row, "Ciudad") || null, source: value(row, "Fuente") || "CSV",
             serviceInterest: value(row, "Servicio solicitado") || value(row, "Servicio") || null,
             type, priority,
             ownerId: owner?.id || null, notes: value(row, "Notas") || null,
             nextFollowUpAt, lastContactAt, createdAt: createdAt || new Date(),
-          },
-          update: {
-            name: accountName, legalName: value(row, "Razón social") || null,
-            website: website || null, taxId: value(row, "NIT") || null,
-            city: value(row, "Ciudad") || null, source: value(row, "Fuente") || "CSV",
+        };
+        const savedAccount = existingAccount ? await transaction.account.update({
+          where: { id: existingAccount.id }, data: {
+            name: accountName, legalName: Object.hasOwn(row, "Razón social") ? value(row, "Razón social") || null : undefined,
+            website: Object.hasOwn(row, "Sitio web") ? website || null : undefined,
+            industry: Object.hasOwn(row, "Industria") ? industry || null : undefined,
+            country,
+            taxId: Object.hasOwn(row, "NIT") ? value(row, "NIT") || null : undefined,
+            city: Object.hasOwn(row, "Ciudad") ? value(row, "Ciudad") || null : undefined,
+            source: Object.hasOwn(row, "Fuente") ? value(row, "Fuente") || "CSV" : undefined,
             serviceInterest: value(row, "Servicio solicitado") || value(row, "Servicio") || null,
-            type, priority,
-            ownerId: owner?.id || null, notes: value(row, "Notas") || null,
-            nextFollowUpAt, lastContactAt,
+            type, priority: Object.hasOwn(row, "Prioridad") ? priority : undefined,
+            ownerId: Object.hasOwn(row, "Responsable") ? owner?.id || null : undefined,
+            notes: Object.hasOwn(row, "Notas") ? value(row, "Notas") || null : undefined,
+            nextFollowUpAt: Object.hasOwn(row, "Próximo contacto") ? nextFollowUpAt : undefined,
+            lastContactAt: Object.hasOwn(row, "Última interacción") ? lastContactAt : undefined,
           },
-        });
-        if (primaryContact) {
-          const existingPrimary = await transaction.contact.findFirst({
-            where: { agencyId, accountId: savedAccount.id, isPrimary: true },
-            select: { id: true },
-          });
+        }) : await transaction.account.create({ data: createData });
+        if (hasPrimaryContact) {
+          const existingPrimary = primaryContacts[0];
           const contactData = {
             agencyId,
             accountId: savedAccount.id,
-            firstName: primaryContact.firstName,
-            lastName: primaryContact.lastName || null,
-            email: contactEmail || null,
-            phone: contactPhone || null,
-            whatsapp: contactPhone || null,
+            email: contactEmail || undefined,
+            phone: contactPhone || undefined,
+            whatsapp: contactPhone || undefined,
             isPrimary: true,
           };
           if (existingPrimary) {
-            await transaction.contact.update({ where: { id: existingPrimary.id }, data: contactData });
+            await transaction.contact.update({ where: { id: existingPrimary.id }, data: {
+              ...contactData,
+              firstName: primaryContact?.firstName,
+              lastName: primaryContact ? primaryContact.lastName || null : undefined,
+            } });
           } else {
-            await transaction.contact.create({ data: contactData });
+            await transaction.contact.create({ data: {
+              ...contactData, firstName: primaryContact?.firstName || "Contacto", lastName: primaryContact?.lastName || null,
+            } });
           }
         }
       }
-      return { kind: existingAccount ? "updated" : "created" };
+      return { kind: existingAccount ? "updated" : "created", targetId: existingAccount?.id };
     }
     case "Contactos": {
-      const existingContact = await transaction.contact.findFirst({
-        where: { agencyId, OR: [{ externalId }, { id: externalId }] }, select: { id: true },
-      });
+      const existingContact = await findByIdOrExternal(agencyId, externalId, (where) => transaction.contact.findMany({
+        where, select: { id: true },
+      }));
       const accountId = value(row, "Organización o lead ID");
-      const account = accountId ? await findByIdOrExternal(agencyId, accountId, (where) => transaction.account.findFirst({ where })) : null;
+      const account = accountId ? await findByIdOrExternal(agencyId, accountId, (where) => transaction.account.findMany({ where })) : null;
       if (accountId && !account) throw new Error("Referenced account was not found in this agency.");
       const { firstName, lastName } = splitName(value(row, "Nombre"));
       if (!firstName || firstName.length > 100 || lastName.length > 100) throw new Error("Contact name is invalid.");
@@ -266,18 +282,18 @@ async function applyRow(
           isPrimary, notes: value(row, "Notas") || null,
         };
         await transaction.contact.upsert({
-          where: { id: existingContact?.id || "__missing__" }, create: data, update: data,
+          where: { id: existingContact?.id || "__missing__" }, create: data, update: { ...data, externalId: undefined },
         });
       }
-      return { kind: existingContact ? "updated" : "created" };
+      return { kind: existingContact ? "updated" : "created", targetId: existingContact?.id };
     }
     case "Oportunidades": {
-      const existingOpportunity = await transaction.opportunity.findFirst({
-        where: { agencyId, OR: [{ externalId }, { id: externalId }] }, select: { id: true },
-      });
+      const existingOpportunity = await findByIdOrExternal(agencyId, externalId, (where) => transaction.opportunity.findMany({
+        where, select: { id: true },
+      }));
       const account = await accountForSheet();
       const partnerId = value(row, "Partner ID");
-      const partner = partnerId ? await findByIdOrExternal(agencyId, partnerId, (where) => transaction.referralPartner.findFirst({ where })) : null;
+      const partner = partnerId ? await findByIdOrExternal(agencyId, partnerId, (where) => transaction.referralPartner.findMany({ where })) : null;
       if (partnerId && !partner) throw new Error("Referenced referral partner was not found in this agency.");
       const amount = parseDecimal(row, "Monto COP", { min: 0 });
       const probability = parseNumber(row, "Probabilidad 0-100", { min: 0, max: 100 });
@@ -300,30 +316,30 @@ async function applyRow(
           actualCloseAt: stage === OpportunityStage.WON || stage === OpportunityStage.LOST ? new Date() : null,
         };
         await transaction.opportunity.upsert({
-          where: { id: existingOpportunity?.id || "__missing__" }, create: data, update: data,
+          where: { id: existingOpportunity?.id || "__missing__" }, create: data, update: { ...data, externalId: undefined },
         });
       }
-      return { kind: existingOpportunity ? "updated" : "created" };
+      return { kind: existingOpportunity ? "updated" : "created", targetId: existingOpportunity?.id };
     }
     case "Actividades": {
-      const existingActivity = await transaction.activity.findFirst({
-        where: { agencyId, OR: [{ externalId }, { id: externalId }] }, select: { id: true },
-      });
+      const existingActivity = await findByIdOrExternal(agencyId, externalId, (where) => transaction.activity.findMany({
+        where, select: { id: true },
+      }));
       const entityType = value(row, "Entidad vinculada").toLowerCase();
       const entityId = value(row, "Entidad ID");
       let accountId: string | null = null;
       let contactId: string | null = null;
       let opportunityId: string | null = null;
       if (entityId && entityType.includes("oportun")) {
-        const entity = await findByIdOrExternal(agencyId, entityId, (where) => transaction.opportunity.findFirst({ where }));
+        const entity = await findByIdOrExternal(agencyId, entityId, (where) => transaction.opportunity.findMany({ where }));
         if (!entity) throw new Error("Referenced opportunity was not found in this agency.");
         opportunityId = entity.id;
       } else if (entityId && entityType.includes("contact")) {
-        const entity = await findByIdOrExternal(agencyId, entityId, (where) => transaction.contact.findFirst({ where }));
+        const entity = await findByIdOrExternal(agencyId, entityId, (where) => transaction.contact.findMany({ where }));
         if (!entity) throw new Error("Referenced contact was not found in this agency.");
         contactId = entity.id;
       } else if (entityId) {
-        const entity = await findByIdOrExternal(agencyId, entityId, (where) => transaction.account.findFirst({ where }));
+        const entity = await findByIdOrExternal(agencyId, entityId, (where) => transaction.account.findMany({ where }));
         if (!entity) throw new Error("Referenced account was not found in this agency.");
         accountId = entity.id;
       }
@@ -345,18 +361,18 @@ async function applyRow(
           completedAt: status === ActivityStatus.COMPLETED ? dueAt || new Date() : null,
         };
         await transaction.activity.upsert({
-          where: { id: existingActivity?.id || "__missing__" }, create: data, update: data,
+          where: { id: existingActivity?.id || "__missing__" }, create: data, update: { ...data, externalId: undefined },
         });
       }
-      return { kind: existingActivity ? "updated" : "created" };
+      return { kind: existingActivity ? "updated" : "created", targetId: existingActivity?.id };
     }
     case "Propuestas": {
-      const existingProposal = await transaction.proposal.findFirst({
-        where: { agencyId, OR: [{ externalId }, { id: externalId }] }, select: { id: true },
-      });
+      const existingProposal = await findByIdOrExternal(agencyId, externalId, (where) => transaction.proposal.findMany({
+        where, select: { id: true },
+      }));
       const account = await accountForSheet();
       const opportunityId = value(row, "Oportunidad ID");
-      const opportunity = opportunityId ? await findByIdOrExternal(agencyId, opportunityId, (where) => transaction.opportunity.findFirst({ where })) : null;
+      const opportunity = opportunityId ? await findByIdOrExternal(agencyId, opportunityId, (where) => transaction.opportunity.findMany({ where })) : null;
       if (opportunityId && (!opportunity || opportunity.accountId !== account.id)) throw new Error("Referenced opportunity does not belong to the selected account.");
       const title = value(row, "Título propuesta");
       if (!title || title.length > 200) throw new Error("Proposal title is required and limited to 200 characters.");
@@ -381,15 +397,15 @@ async function applyRow(
         await transaction.proposal.upsert({
           where: { id: existingProposal?.id || "__missing__" },
           create: { ...data, version: 1, createdAt: proposalDate || new Date() },
-          update: data,
+          update: { ...data, externalId: undefined, number: undefined },
         });
       }
-      return { kind: existingProposal ? "updated" : "created" };
+      return { kind: existingProposal ? "updated" : "created", targetId: existingProposal?.id };
     }
     case "Proyectos": {
-      const existingProject = await transaction.project.findFirst({
-        where: { agencyId, OR: [{ externalId }, { id: externalId }] }, select: { id: true },
-      });
+      const existingProject = await findByIdOrExternal(agencyId, externalId, (where) => transaction.project.findMany({
+        where, select: { id: true },
+      }));
       const account = await accountForSheet();
       const name = value(row, "Nombre");
       if (!name || name.length > 200) throw new Error("Project name is required and limited to 200 characters.");
@@ -407,15 +423,15 @@ async function applyRow(
           progress: Math.round(progress), deliverablesUrl: value(row, "Enlace entregables") || null,
         };
         await transaction.project.upsert({
-          where: { id: existingProject?.id || "__missing__" }, create: data, update: data,
+          where: { id: existingProject?.id || "__missing__" }, create: data, update: { ...data, externalId: undefined },
         });
       }
-      return { kind: existingProject ? "updated" : "created" };
+      return { kind: existingProject ? "updated" : "created", targetId: existingProject?.id };
     }
     case "Tareas": {
-      const existingTask = await transaction.workItem.findFirst({
-        where: { agencyId, OR: [{ externalId }, { id: externalId }] }, select: { id: true },
-      });
+      const existingTask = await findByIdOrExternal(agencyId, externalId, (where) => transaction.workItem.findMany({
+        where, select: { id: true },
+      }));
       const project = await projectForSheet();
       const title = value(row, "Tarea");
       if (!title || title.length > 200) throw new Error("Task title is required and limited to 200 characters.");
@@ -436,15 +452,15 @@ async function applyRow(
           completedAt: status === WorkItemStatus.DONE ? dueAt || new Date() : null,
         };
         await transaction.workItem.upsert({
-          where: { id: existingTask?.id || "__missing__" }, create: data, update: data,
+          where: { id: existingTask?.id || "__missing__" }, create: data, update: { ...data, externalId: undefined },
         });
       }
-      return { kind: existingTask ? "updated" : "created" };
+      return { kind: existingTask ? "updated" : "created", targetId: existingTask?.id };
     }
     case "Horas": {
-      const existingEntry = await transaction.timeEntry.findFirst({
-        where: { agencyId, OR: [{ externalId }, { id: externalId }] }, select: { id: true },
-      });
+      const existingEntry = await findByIdOrExternal(agencyId, externalId, (where) => transaction.timeEntry.findMany({
+        where, select: { id: true },
+      }));
       const project = await projectForSheet();
       const hours = parseDecimal(row, "Horas", { required: true, min: 0.01, max: 24 })!;
       const workDate = parseDate(row, "Fecha", true)!;
@@ -464,15 +480,15 @@ async function applyRow(
           billableRate: null, billable, description,
         };
         await transaction.timeEntry.upsert({
-          where: { id: existingEntry?.id || "__missing__" }, create: data, update: data,
+          where: { id: existingEntry?.id || "__missing__" }, create: data, update: { ...data, externalId: undefined },
         });
       }
-      return { kind: existingEntry ? "updated" : "created" };
+      return { kind: existingEntry ? "updated" : "created", targetId: existingEntry?.id };
     }
     case "Servicios": {
-      const existingService = await transaction.service.findFirst({
-        where: { agencyId, OR: [{ externalId }, { id: externalId }] }, select: { id: true },
-      });
+      const existingService = await findByIdOrExternal(agencyId, externalId, (where) => transaction.service.findMany({
+        where, select: { id: true },
+      }));
       const name = value(row, "Servicio");
       if (!name || name.length > 160) throw new Error("Service name is required and limited to 160 characters.");
       const defaultPrice = parseDecimal(row, "Precio COP", { min: 0 });
@@ -484,10 +500,10 @@ async function applyRow(
           cycle: value(row, "Ciclo") || null, defaultPrice, estimatedCost, active,
         };
         await transaction.service.upsert({
-          where: { id: existingService?.id || "__missing__" }, create: data, update: data,
+          where: { id: existingService?.id || "__missing__" }, create: data, update: { ...data, externalId: undefined },
         });
       }
-      return { kind: existingService ? "updated" : "created" };
+      return { kind: existingService ? "updated" : "created", targetId: existingService?.id };
     }
     default:
       throw new Error("This sheet is export-only; import is not supported.");
@@ -507,8 +523,17 @@ export async function POST(request: Request) {
     const sheet = parsedInput.data.sheet as DataSheetName;
     if (!importable.has(sheet)) return NextResponse.json({ error: "This sheet is export-only. It can be downloaded, but not imported safely yet." }, { status: 422 });
     const table = parseCsv(parsedInput.data.csv, 500);
+    if (sheet === "Prospectos" || sheet === "Clientes") {
+      const aliases: Record<string, string> = { Pais: "País", Sector: "Industria" };
+      table.headers = table.headers.map((header) => Object.hasOwn(aliases, header) ? aliases[header] : header);
+      if (new Set(table.headers).size !== table.headers.length) {
+        return NextResponse.json({ error: "CSV contains duplicate columns for the same field." }, { status: 400 });
+      }
+      table.rows = table.rows.map((row) => Object.fromEntries(Object.entries(row).map(([header, cell]) => [Object.hasOwn(aliases, header) ? aliases[header] : header, cell])));
+    }
     const expectedHeaders = sheetHeaders[sheet] as readonly string[];
-    const missingHeaders = expectedHeaders.filter((header) => !table.headers.includes(header));
+    const optionalHeaders = optionalImportHeaders[sheet] || [];
+    const missingHeaders = expectedHeaders.filter((header) => !optionalHeaders.includes(header) && !table.headers.includes(header));
     if (missingHeaders.length) return NextResponse.json({ error: "CSV headers do not match the selected sheet.", missingHeaders }, { status: 400 });
 
     const ids = new Set<string>();
@@ -523,20 +548,39 @@ export async function POST(request: Request) {
     const errors: Array<{ row: number; message: string }> = [];
     const counts = { created: 0, updated: 0 };
     await prisma.$transaction(async (transaction) => {
+      const accountIssues = sheet === "Prospectos" || sheet === "Clientes"
+        ? accountImportIssues(table.rows, await transaction.account.findMany({
+          where: { agencyId: auth!.agencyId }, select: { id: true, externalId: true, name: true, country: true },
+        }), sheet === "Clientes" ? "Razón social" : "Empresa")
+        : new Map<number, string>();
+      const targets = new Set<string>();
+      // Validate every row without writes, including when commit was requested.
       for (let index = 0; index < table.rows.length; index += 1) {
         if (duplicateLines.has(index + 2)) {
           errors.push({ row: index + 2, message: "Duplicate ID in this CSV." });
           continue;
         }
+        const accountIssue = accountIssues.get(index);
+        if (accountIssue) {
+          errors.push({ row: index + 2, message: accountIssue });
+          continue;
+        }
         try {
-          const result = await applyRow(transaction, auth!.agencyId, sheet, table.rows[index], parsedInput.data.commit);
+          const result = await applyRow(transaction, auth!.agencyId, sheet, table.rows[index], false);
+          if (result.targetId && targets.has(result.targetId)) {
+            errors.push({ row: index + 2, message: "Duplicate record: multiple CSV IDs resolve to the same record." });
+            continue;
+          }
+          if (result.targetId) targets.add(result.targetId);
           if (result.kind === "created") counts.created += 1;
           else counts.updated += 1;
         } catch (error) {
+          if (error instanceof Prisma.PrismaClientKnownRequestError || error instanceof Prisma.PrismaClientUnknownRequestError) throw error;
           errors.push({ row: index + 2, message: error instanceof Error ? error.message : "Invalid row." });
         }
       }
       if (parsedInput.data.commit && errors.length === 0) {
+        // Let write failures escape this callback so Prisma rolls back the entire batch.
         for (const row of table.rows) {
           await applyRow(transaction, auth!.agencyId, sheet, row, true);
         }
@@ -549,7 +593,7 @@ export async function POST(request: Request) {
           },
         });
       }
-    }, { timeout: 30_000 });
+    }, { timeout: 30_000, isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
 
     if (parsedInput.data.commit && errors.length) return NextResponse.json({
       error: "CSV validation failed; no records were written.",
@@ -561,12 +605,15 @@ export async function POST(request: Request) {
       mode: parsedInput.data.commit ? "imported" : "preview",
       sheet,
       totalRows: table.rows.length,
-      created: parsedInput.data.commit ? counts.created : undefined,
-      updated: parsedInput.data.commit ? counts.updated : undefined,
+      created: counts.created,
+      updated: counts.updated,
       validRows: table.rows.length - errors.length,
       errors,
     }, { status: parsedInput.data.commit && errors.length ? 422 : 200 });
   } catch (error) {
+    if (error instanceof Prisma.PrismaClientKnownRequestError && ["P2002", "P2034"].includes(error.code)) {
+      return NextResponse.json({ error: "Import conflicted with another record or concurrent change; no records were written. Preview again before retrying." }, { status: 409 });
+    }
     if (error instanceof Error && /CSV |Row \d+|headers|unterminated|empty|limit/i.test(error.message)) {
       return NextResponse.json({ error: error.message }, { status: 400 });
     }

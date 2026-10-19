@@ -37,6 +37,40 @@ To connect a Neon database after it has been explicitly provisioned:
 
 The dashboard can issue invoices and record partial/full payments. Referral partners and commission approval/disbursement still need dedicated management endpoints and UI; commission rows remain export-only. No accounting module should be treated as production-verified until tested against a configured database and real source records.
 
+## CSV import regression checks
+
+Use Node.js 22.15+ (Node.js 24 recommended). Install the versions in the committed
+lockfile, generate the Prisma client, then validate:
+
+```bash
+npm ci
+npm run db:generate
+npm test
+npm run lint
+npm run build -- --webpack
+```
+
+The CSV tests execute the actual import/export handlers with an isolated,
+transactional in-memory database double and a simulated signed-in user. They do
+not connect to Neon. They cover validation with zero writes, whole-batch rollback
+on storage/audit failure, duplicate IDs and companies, agency isolation, stable
+external IDs, legacy templates, country preservation and a **synthetic** 121-row
+batch. Real PostgreSQL concurrency, authentication and production deployment still
+need a configured staging environment before using live prospect records.
+
+The account CSV templates now export optional `País`, `Industria` and website
+fields. `Pais` and `Sector` are accepted aliases. Country names in Spanish/English
+or ISO alpha-2 codes are normalized without assuming Colombia. A new legacy row
+with no country stores an explicit empty country; an existing account keeps its
+country when the country is missing or blank. No historical country values are
+guessed or rewritten, and no schema migration is needed for this patch.
+
+Matching company names with the same country (or with an unknown country) require
+reconciling their IDs before import; records are never merged automatically. A
+concurrent transaction or database uniqueness conflict returns HTTP 409 and rolls
+back the batch. Preview again before retrying. Preview and final confirmation show
+new and existing/updated counts. The final confirmation validates the data again.
+
 ## API
 
 ```bash
