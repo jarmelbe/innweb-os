@@ -52,15 +52,32 @@ function privateJson(body: object, status = 200) {
   });
 }
 
-export async function POST(request: Request) {
-  if (!process.env.DATABASE_URL) {
-    return privateJson({ error: "CRM database is not configured." }, 503);
+function matchesOrigin(request: Request, origin: string): boolean {
+  try {
+    const url = new URL(request.url);
+    // Next may use an internal hostname in request.url. The hosting router must
+    // preserve Host; do not trust client-supplied forwarding headers here.
+    const host = request.headers.get("host");
+    if (!host) return origin === url.origin;
+    const external = new URL(`${url.protocol}//${host}`);
+    if (external.username || external.password || external.pathname !== "/" || external.search || external.hash) {
+      return false;
+    }
+    return origin === external.origin;
+  } catch {
+    return false;
   }
+}
 
+export async function POST(request: Request) {
   // Reject cross-origin browser POSTs before invoking a billable AI provider.
   const origin = request.headers.get("origin");
-  if (origin && origin !== new URL(request.url).origin) {
+  if (origin && !matchesOrigin(request, origin)) {
     return privateJson({ error: "Origin not allowed." }, 403);
+  }
+
+  if (!process.env.DATABASE_URL) {
+    return privateJson({ error: "CRM database is not configured." }, 503);
   }
 
   let auth;

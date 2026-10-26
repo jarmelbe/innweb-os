@@ -79,7 +79,7 @@ export function fixture(context) {
 }
 
 export async function send(prompt = "Propuesta de prueba", options = {}) {
-  const request = new Request(`${origin}/api/crm/ai`, {
+  const request = new Request(options.url ?? `${origin}/api/crm/ai`, {
     method: "POST",
     headers: { "Content-Type": "application/json", Origin: origin, ...options.headers },
     body: options.raw ?? JSON.stringify(options.body ?? { prompt }),

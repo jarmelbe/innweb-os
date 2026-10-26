@@ -234,3 +234,65 @@ test("the same origin is accepted without trusting forwarded-host overrides", as
   assert.equal(result.status, 200);
   assert.equal(state.calls.length, 1);
 });
+
+test("Next's internal hostname does not reject the external Host and matching Origin", async (context) => {
+  const state = fixture(context);
+  state.auth = null;
+  const result = await send(undefined, {
+    url: "http://localhost:3105/api/crm/ai",
+    headers: { Host: "127.0.0.1:3105", Origin: "http://127.0.0.1:3105" },
+  });
+  assert.equal(result.status, 401);
+  assert.equal(result.headers.get("cache-control"), "no-store");
+  assert.equal(state.authCalls, 1);
+  assert.equal(state.calls.length, 0);
+});
+
+test("an Origin matching only Next's internal hostname is rejected", async (context) => {
+  const state = fixture(context);
+  const result = await send(undefined, {
+    url: "http://localhost:3105/api/crm/ai",
+    headers: { Host: "127.0.0.1:3105", Origin: "http://localhost:3105" },
+  });
+  assert.equal(result.status, 403);
+  assert.equal(state.authCalls, 0);
+  assert.equal(state.calls.length, 0);
+});
+
+test("forwarded headers cannot substitute the router-preserved Host", async (context) => {
+  const state = fixture(context);
+  const result = await send(undefined, {
+    url: "http://localhost:3105/api/crm/ai",
+    headers: {
+      Host: "127.0.0.1:3105", Origin: "https://foreign.example.test",
+      "x-forwarded-host": "foreign.example.test", "x-forwarded-proto": "https",
+    },
+  });
+  assert.equal(result.status, 403);
+  assert.equal(state.authCalls, 0);
+  assert.equal(state.calls.length, 0);
+});
+
+for (const host of [
+  "username@safe.example.test",
+  "username:password@safe.example.test",
+  "safe.example.test/path",
+  "safe.example.test?query=value",
+  "safe.example.test#fragment",
+  "safe.example.test:invalid-port",
+]) test(`malformed Host ${host} is rejected before session lookup`, async (context) => {
+  const state = fixture(context);
+  const result = await send(undefined, { headers: { Host: host, Origin: "https://safe.example.test" } });
+  assert.equal(result.status, 403);
+  assert.equal(state.authCalls, 0);
+  assert.equal(state.calls.length, 0);
+});
+
+test("foreign origins remain rejected when the database is missing", async (context) => {
+  const state = fixture(context);
+  delete process.env.DATABASE_URL;
+  const result = await send(undefined, { headers: { Origin: "https://foreign.example.test" } });
+  assert.equal(result.status, 403);
+  assert.equal(state.authCalls, 0);
+  assert.equal(state.calls.length, 0);
+});

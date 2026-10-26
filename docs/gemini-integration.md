@@ -21,12 +21,13 @@ This feature was prepared for `jarmelbe/innweb-os` (Next.js 16, existing CRM ses
 
 - The PR #5 Preview deployment built successfully. Its `/api/crm/ai` route is present (GET returns 405), but a complete signed-in Gemini request has not been verified.
 - Vercel metadata initially showed only `DATABASE_URL`, `DIRECT_URL` and `INNWEB_SETUP_TOKEN`, all scoped exclusively to Production. No Preview database variables or `GEMINI_API_KEY` were configured at that inspection.
+- The regenerated Gemini key was subsequently entered in Vercel by the owner. Its scope was corrected to **Preview only**, retaining type **Sensitive**, without reading or transferring the value. A later metadata check still showed no Preview database connections, so a signed-in provider call remains unverified.
 - The Production build for merge commit `f5063c2874343bd3ad89addb08a63f571703d620` failed during Prisma `migrate deploy` with P1001 because its database hostname was an example placeholder. Correct production connections in the secret manager separately; do not bypass migrations or copy production credentials into Preview.
 - A regenerated Google key has not been independently validated. Confirm its presence via secret metadata, without decrypting or displaying it. Test the provider only through an authorized Preview session.
 
 ## Automated regression checks
 
-`npm test` includes the actual Gemini route with only session lookup and provider fetch replaced by test doubles. It covers missing configuration, authentication, origin checks, invalid input, provider request fields, token cap, five-per-minute limits and bounded limiter capacity, sanitized errors, timeouts, and malformed or non-completed responses. These tests use synthetic data and cannot contact Google or PostgreSQL. They complement the live Preview checks above.
+`npm test` includes the actual Gemini route with only session lookup and provider fetch replaced by test doubles. It covers missing configuration, authentication, origin checks (including Next's internal hostname differing from Host), invalid input, provider request fields, token cap, five-per-minute limits and bounded limiter capacity, sanitized errors, timeouts, and malformed or non-completed responses. These tests use synthetic data and cannot contact Google or PostgreSQL. They complement the live Preview checks above.
 
 ## Safety, privacy and limitations
 
@@ -37,7 +38,7 @@ This feature was prepared for `jarmelbe/innweb-os` (Next.js 16, existing CRM ses
 - Calls use `store: false` for stateless Interactions API behavior. This does not replace Google's other data handling obligations or a privacy review.
 - Do not enter personal, medical, financial or confidential client information until the provider's terms and your privacy practices are reviewed.
 - This MVP has **no durable rate limiting**: replace with shared quota storage, usage alerts and audit metadata before multi-instance production.
-- The cross-origin check should be tested behind the production reverse proxy. Restrict the module to authorized agency roles if team-wide access isn't desired.
+- The hosting router/reverse proxy must preserve the incoming `Host` and the public request scheme. Origin validation uses that host rather than Next's potentially internal request hostname; it rejects malformed hosts and ignores `X-Forwarded-Host`/`X-Forwarded-Proto` overrides. Confirm this on the actual Preview hostname before release. Restrict the module to authorized agency roles if team-wide access isn't desired.
 - No Google account, API key or real Gemini API response can be validated from GitHub alone. This is a code integration ready for secret configuration, not an active Gemini connection.
 
 Official API documentation:
