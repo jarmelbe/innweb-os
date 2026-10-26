@@ -9,26 +9,39 @@ const Input = z.object({
   prompt: z.string().trim().min(2).max(4000),
 });
 
+const Interaction = z.object({
+  status: z.literal("completed"),
+  steps: z.array(z.object({
+    type: z.string(),
+    content: z.array(z.object({
+      type: z.string(),
+      text: z.string().optional(),
+    })).optional(),
+  })),
+});
+
 // Best-effort private MVP limiter. Replace with durable limits before broad usage.
 const usage = new Map<string, { count: number; until: number }>();
 const WINDOW_MS = 60_000;
 const LIMIT = 5;
+const MAX_USERS = 5_000;
 
 function allowRequest(agencyId: string, userId: string): boolean {
   const now = Date.now();
   const key = `${agencyId}:${userId}`;
   const record = usage.get(key);
   if (!record || record.until <= now) {
+    if (usage.size >= MAX_USERS) {
+      for (const [k, value] of usage) {
+        if (value.until <= now) usage.delete(k);
+      }
+      if (!usage.has(key) && usage.size >= MAX_USERS) return false;
+    }
     usage.set(key, { count: 1, until: now + WINDOW_MS });
     return true;
   }
   if (record.count >= LIMIT) return false;
   record.count++;
-  if (usage.size > 5_000) {
-    for (const [k, value] of usage) {
-      if (value.until <= now) usage.delete(k);
-    }
-  }
   return true;
 }
 
@@ -39,26 +52,41 @@ function privateJson(body: object, status = 200) {
   });
 }
 
-type GeminiStep = {
-  type?: string;
-  content?: Array<{ type?: string; text?: string }>;
-};
+function matchesOrigin(request: Request, origin: string): boolean {
+  try {
+    const url = new URL(request.url);
+    // Next may use an internal hostname in request.url. The hosting router must
+    // preserve Host; do not trust client-supplied forwarding headers here.
+    const host = request.headers.get("host");
+    if (!host) return origin === url.origin;
+    const external = new URL(`${url.protocol}//${host}`);
+    if (external.username || external.password || external.pathname !== "/" || external.search || external.hash) {
+      return false;
+    }
+    return origin === external.origin;
+  } catch {
+    return false;
+  }
+}
 
 export async function POST(request: Request) {
-  if (!process.env.DATABASE_URL) {
-    return privateJson({ error: "CRM database is not configured." }, 503);
-  }
-
   // Reject cross-origin browser POSTs before invoking a billable AI provider.
   const origin = request.headers.get("origin");
-  if (origin && origin !== new URL(request.url).origin) {
+  if (origin && !matchesOrigin(request, origin)) {
     return privateJson({ error: "Origin not allowed." }, 403);
+  }
+
+  if (!process.env.DATABASE_URL) {
+    return privateJson({ error: "CRM database is not configured." }, 503);
   }
 
   let auth;
   try {
     const result = await requireCrmUser();
-    if (result.response) return result.response;
+    if (result.response) {
+      result.response.headers.set("Cache-Control", "no-store");
+      return result.response;
+    }
     auth = result.auth;
   } catch {
     return privateJson({ error: "Could not verify CRM session." }, 503);
@@ -90,6 +118,7 @@ export async function POST(request: Request) {
         model,
         input: input.data.prompt,
         store: false,
+        generation_config: { max_output_tokens: 2048 },
       }),
       signal: AbortSignal.timeout(25_000),
       cache: "no-store",
@@ -101,8 +130,11 @@ export async function POST(request: Request) {
       return privateJson({ error: "Gemini is unavailable or the key/model is invalid." }, 502);
     }
 
-    const result: { status?: string; steps?: GeminiStep[] } = await upstream.json();
-    const answer = (result.steps || [])
+    const result = Interaction.safeParse(await upstream.json());
+    if (!result.success) {
+      return privateJson({ error: "Gemini did not return a completed text answer." }, 502);
+    }
+    const answer = result.data.steps
       .filter((step) => step.type === "model_output")
       .flatMap((step) => step.content || [])
       .filter((part) => part.type === "text" && typeof part.text === "string")
