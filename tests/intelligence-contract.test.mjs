@@ -32,8 +32,8 @@ test("private intelligence page enforces CRM identity and administrator access",
 
 test("legacy RankPulse scoring remains separate from optional intelligence modules", () => {
   const api = read("app/api/v1/opportunity-finder/audit/route.ts");
-  assert.match(api, /overallScore/);
-  assert.match(api, /opportunityScore/);
+  assert.match(api, /scores:\s*\{\s*overall,\s*\.\.\.scores\s*\}/);
+  assert.match(api, /opportunityScore:\s*opportunity/);
   assert.doesNotMatch(api, /innweb-intelligence|intelligenceModules/);
   const registry = read("lib/innweb-intelligence.ts");
   assert.match(registry, /puntuación técnica actual se conserva/);
