@@ -23,6 +23,7 @@ export default async function IntelligencePage() {
   let user = null;
   try { user = await getAuthContext(); } catch { /* Database unavailable: fall back to login */ }
   if (!user) redirect("/login");
+  if (user.role !== "OWNER" && user.role !== "ADMIN") redirect("/dashboard");
 
   return <main className="ix-shell">
     <div className="ix-wrap">
