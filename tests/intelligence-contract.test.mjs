@@ -37,13 +37,13 @@ test("legacy RankPulse scoring remains separate from optional intelligence modul
   // Preserve the historical six-axis scoring weights until there is a
   // deliberately versioned migration with comparable old/new scores.
   for (const formula of [
-    /scores\\.performance\\s*\\*\\s*0\\.2/,
-    /scores\\.seo\\s*\\*\\s*0\\.2/,
-    /scores\\.security\\s*\\*\\s*0\\.15/,
-    /scores\\.accessibility\\s*\\*\\s*0\\.1/,
-    /scores\\.conversion\\s*\\*\\s*0\\.15/,
-    /scores\\.infrastructure\\s*\\*\\s*0\\.2/,
-    /clamp\\(100\\s*-\\s*overall\\s*\\+\\s*20\\)/,
+    /scores\.performance\s*\*\s*0\.2/,
+    /scores\.seo\s*\*\s*0\.2/,
+    /scores\.security\s*\*\s*0\.15/,
+    /scores\.accessibility\s*\*\s*0\.1/,
+    /scores\.conversion\s*\*\s*0\.15/,
+    /scores\.infrastructure\s*\*\s*0\.2/,
+    /clamp\(100\s*-\s*overall\s*\+\s*20\)/,
   ]) {
     assert.match(api, formula);
   }
