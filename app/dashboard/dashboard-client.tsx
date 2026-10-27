@@ -836,6 +836,7 @@ export default function AgencyDashboard({ user, role }: { user: { name: string; 
               <i>{["⌂", "✳", "◎", "◇", "◌", "▱", "⌁"][index]}</i>{item}
             </a>
           ))}
+          <Link href="/dashboard/intelligence" title="Abrir InnWeb Intelligence Studio"><i>✦</i>{language === "es" ? "Studio IA" : "AI Studio"}</Link>
         </nav>
         <div className="agency-profile">
           <div className="avatar">IW</div>
