@@ -16,6 +16,7 @@ export default async function AiPage() {
   let user;
   try { user = await getAuthContext(); } catch { user = null; }
   if (!user) redirect("/login");
+  if (user.role !== "OWNER" && user.role !== "ADMIN") redirect("/dashboard");
 
   return <main style={{ maxWidth: 840, margin: "36px auto", padding: "0 20px 48px" }}>
     <p style={{ color: "#9cdf3e", letterSpacing: 1, fontSize: 12 }}>INNWEB OS / INTELIGENCIA</p>
@@ -24,6 +25,9 @@ export default async function AiPage() {
       Prueba privada: analiza ideas y redacta propuestas. No introduzcas datos personales,
       médicos, financieros ni información confidencial de clientes.
     </p>
+    {!process.env.GEMINI_API_KEY && <p role="status" style={{padding:16,border:"1px solid #d97706",borderRadius:10}}>
+      Gemini está pendiente de configuración en este servidor. Añade GEMINI_API_KEY al entorno de despliegue correspondiente.
+    </p>}
     <AiClient />
     <p style={{ marginTop: 24 }}><Link href="/dashboard">← Volver al CRM</Link></p>
   </main>;

@@ -4,6 +4,7 @@ import { requireCrmUser } from "@/lib/crm";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+export const maxDuration = 60;
 
 const Input = z.object({
   prompt: z.string().trim().min(2).max(4000),
@@ -57,7 +58,7 @@ export async function POST(request: Request) {
 
   let auth;
   try {
-    const result = await requireCrmUser();
+    const result = await requireCrmUser(["OWNER", "ADMIN"]);
     if (result.response) return result.response;
     auth = result.auth;
   } catch {
@@ -78,6 +79,7 @@ export async function POST(request: Request) {
     return privateJson({ error: "Rate limit reached. Try again in one minute." }, 429);
   }
 
+  // Google models are configured server-side. See ai.google.dev/gemini-api/docs/models.
   const model = process.env.GEMINI_MODEL || "gemini-3.8-flash";
   try {
     const upstream = await fetch("https://generativelanguage.googleapis.com/v1beta/interactions", {
@@ -91,14 +93,23 @@ export async function POST(request: Request) {
         input: input.data.prompt,
         store: false,
       }),
-      signal: AbortSignal.timeout(25_000),
+      signal: AbortSignal.timeout(45_000),
       cache: "no-store",
     });
 
     if (!upstream.ok) {
-      // Do not forward upstream error details or provider account identifiers.
-      console.error("Gemini request failed with status", upstream.status);
-      return privateJson({ error: "Gemini is unavailable or the key/model is invalid." }, 502);
+      // Never log requests, user prompts, tokens, secrets or raw provider responses.
+      console.error("InnWeb OS Gemini upstream HTTP status", upstream.status);
+      if (upstream.status === 401 || upstream.status === 403) {
+        return privateJson({ error: "La clave de Google Gemini no está autorizada. Revisa las restricciones de API y la configuración del servidor.", code: "GEMINI_AUTH" }, 502);
+      }
+      if (upstream.status === 404 || upstream.status === 400) {
+        return privateJson({ error: "El modelo de Gemini no está disponible para este proyecto. Comprueba GEMINI_MODEL en el servidor.", code: "GEMINI_MODEL" }, 502);
+      }
+      if (upstream.status === 429) {
+        return privateJson({ error: "Google Gemini alcanzó su límite de uso. Intenta más tarde o revisa la cuota del proyecto.", code: "GEMINI_QUOTA" }, 429);
+      }
+      return privateJson({ error: "Google Gemini no responde en este momento.", code: "GEMINI_PROVIDER" }, 502);
     }
 
     const result: { status?: string; steps?: GeminiStep[] } = await upstream.json();
@@ -110,12 +121,12 @@ export async function POST(request: Request) {
       .join("\n")
       .trim();
 
-    if (!answer) return privateJson({ error: "Gemini did not return a text answer." }, 502);
+    if (!answer) return privateJson({ error: "Google Gemini no devolvió texto. Intenta con una consulta más breve.", code: "GEMINI_EMPTY" }, 502);
     return privateJson({ answer, model });
   } catch (error) {
     const timeout = error instanceof Error && error.name === "TimeoutError";
     return privateJson({
-      error: timeout ? "Gemini timed out." : "Gemini connection failed.",
+      error: timeout ? "Google Gemini tardó demasiado en responder. Intenta otra vez." : "No se pudo establecer conexión con Google Gemini.",
     }, timeout ? 504 : 502);
   }
 }
