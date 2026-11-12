@@ -1,0 +1,40 @@
+.ix-shell{min-height:100vh;background:#10120d;color:#f3f2e9;font-family:Inter,Arial,sans-serif;padding:32px 18px 70px}
+.ix-wrap{max-width:1180px;margin:0 auto}
+.ix-nav{display:flex;gap:18px;align-items:center;justify-content:space-between;color:#b8beb0;font-size:13px;border-bottom:1px solid #394132;padding:7px 0 23px}
+.ix-nav a{color:#d5f3ab;text-decoration:none}.ix-nav a:hover{text-decoration:underline}
+.ix-eyebrow,.ix-category,.ix-sectionTitle span{letter-spacing:.16em;text-transform:uppercase;color:#a9dd70;font-weight:600;font-size:11px}
+.ix-hero{padding:68px 0 54px;max-width:900px}.ix-hero h1{font-size:clamp(36px,5vw,68px);line-height:1.03;letter-spacing:-.045em;font-weight:600;margin:18px 0 20px}
+.ix-hero p{color:#bbc2b2;font-size:clamp(16px,1.8vw,21px);max-width:720px;line-height:1.65}
+.ix-heroMeta{font-size:12px;color:#8e9a86;margin-top:30px}
+.ix-sectionTitle{display:flex;gap:18px;justify-content:space-between;align-items:center;border-top:1px solid #384034;padding:22px 0}
+.ix-sectionTitle p{color:#b9c4ae;margin:0;font-size:13px}
+.ix-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:13px}
+.ix-module{display:flex;flex-direction:column;text-align:left;min-height:236px;background:#1a1e16;color:#f2f0e6;border:1px solid #31392d;border-radius:17px;padding:23px;cursor:pointer;transition:transform .18s ease,border-color .18s ease}
+.ix-module:hover,.ix-module:focus-visible{border-color:#9fce5c;transform:translateY(-2px);outline-offset:3px}
+.ix-module.ix-selected{background:#26311f;border-color:#9bd765}
+.ix-module strong{font-size:24px;letter-spacing:-.025em;margin-top:17px}
+.ix-strapline{font-size:14px;color:#d1dfbf;line-height:1.4;margin-top:8px}
+.ix-description{font-size:13px;color:#b2bbae;line-height:1.5;margin-top:10px}
+.ix-state{margin-top:auto;padding-top:17px;color:#c0de99;font-size:11px;letter-spacing:.05em}
+.ix-editor{margin-top:54px;display:grid;grid-template-columns:1.08fr .92fr;border:1px solid #354032;border-radius:23px;overflow:hidden;background:#1b2018}
+.ix-editorLeft,.ix-editorRight{padding:32px}
+.ix-editorLeft{border-right:1px solid #354032}.ix-editor h2{font-size:32px;letter-spacing:-.035em;margin:14px 0 8px}
+.ix-editor p{color:#b7c2b2;line-height:1.65}.ix-explainer{background:#252d20;padding:15px 17px;border-radius:11px;font-size:13px}
+.ix-editor label{display:block;font-size:13px;font-weight:600;margin:25px 0 10px}
+.ix-editor textarea{width:100%;resize:vertical;background:#11150f;color:#f3f2e9;border:1px solid #505d4b;border-radius:13px;padding:15px;line-height:1.5;font-size:14px}
+.ix-editor textarea:focus-visible{outline:2px solid #9bd765;outline-offset:3px}
+.ix-formFooter{display:flex;gap:15px;align-items:center;justify-content:space-between;margin-top:14px}
+.ix-formFooter>span{color:#9ca998;font-size:12px}
+.ix-formFooter button,.ix-secondary{border:0;border-radius:999px;padding:13px 20px;font-weight:650;font-size:13px;cursor:pointer}
+.ix-formFooter button{background:#a5e16e;color:#122010}
+.ix-formFooter button:disabled{opacity:.5;cursor:not-allowed}
+.ix-editorRight{background:radial-gradient(ellipse at 80% 0%,rgba(143,217,95,.09),transparent 48%),#141a12}
+.ix-editorRight h3{font-size:27px;line-height:1.2;letter-spacing:-.02em;margin:40px 0 12px}
+.ix-note{margin-top:50px;font-size:12px;border-top:1px solid #313d2d;padding-top:20px}
+.ix-result{white-space:pre-wrap;overflow-wrap:anywhere;line-height:1.7;font-size:14px;margin:22px 0 24px;max-height:600px;overflow-y:auto}
+.ix-secondary{background:transparent;color:#cceda5;border:1px solid #79956c}
+.ix-alert{background:#332920;color:#f8d8bc;padding:14px;border:1px solid #866447;border-radius:12px;font-size:13px}
+.ix-footer{font-size:12px;color:#8d9d85;line-height:1.7;margin-top:29px}
+@media(max-width:900px){.ix-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.ix-editor{grid-template-columns:1fr}.ix-editorLeft{border-right:0;border-bottom:1px solid #354032}}
+@media(max-width:610px){.ix-shell{padding:22px 14px 55px}.ix-nav span{display:none}.ix-hero{padding:48px 0 35px}.ix-grid{grid-template-columns:1fr}.ix-module{min-height:205px}.ix-sectionTitle{align-items:flex-start;flex-direction:column}.ix-editorLeft,.ix-editorRight{padding:22px}.ix-formFooter{align-items:stretch;flex-direction:column}.ix-formFooter button{width:100%}}
+@media(prefers-reduced-motion:reduce){.ix-module{transition:none}.ix-module:hover{transform:none}}

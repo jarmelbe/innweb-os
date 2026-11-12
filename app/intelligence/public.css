@@ -1,0 +1,14 @@
+.ix-publicCard{cursor:default}
+.ix-publicCard:hover{transform:none;border-color:#516443}
+.ix-cardLink{display:inline-block;margin-top:15px;color:#d4ffaa;font-size:13px;font-weight:650;text-decoration:none}
+.ix-cardLink:hover{text-decoration:underline}
+.ix-publicInput{display:block;width:100%;border:1px solid #506044;border-radius:11px;background:#11150f;color:#f4f4eb;padding:13px 14px;font-size:14px;min-height:45px}
+.ix-publicInput:focus-visible{outline:2px solid #a5e16e;outline-offset:3px}
+.ix-publicInput option{color:#111;background:#fff}
+.ix-briefTitle{margin-top:60px}
+.ix-publicCta{margin-top:70px;border:1px solid #43583c;border-radius:22px;padding:clamp(25px,5vw,55px);background:linear-gradient(135deg,#263421,#141a12)}
+.ix-publicCta h2{max-width:740px;font-size:clamp(30px,4.6vw,54px);letter-spacing:-.035em;margin:15px 0}
+.ix-publicCta p{max-width:730px;color:#b9cbb2;font-size:16px;line-height:1.65}
+.ix-publicCta a{display:inline-block;margin-top:15px;padding:14px 21px;border-radius:99px;background:#a5e16e;color:#132112;font-size:14px;font-weight:700;text-decoration:none}
+.ix-publicCta a:hover{background:#c4f798}
+@media(max-width:620px){.ix-publicCta{margin-top:45px}.ix-briefTitle{margin-top:35px}}
